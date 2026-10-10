@@ -1985,6 +1985,21 @@ body.kid-locked .cassignee{pointer-events:none;}
 /* dark mode: category-tinted bricks keep the category colour but sit dark */
 [data-theme="dark"] .brick{background:color-mix(in srgb, var(--brick-strong, #888) 30%, var(--white));color:var(--ink);}
 
+/* ---- from scratch ---- */
+.fhs-btn{ font:inherit; font-size:.8rem; font-weight:600; margin-left:8px; padding:3px 10px; border-radius:999px; border:1px solid var(--accent,#6C4F8A); background:transparent; color:var(--accent-dark,#543A70); cursor:pointer; white-space:nowrap; }
+.shopping-item-row .fhs-btn{ margin:0 0 0 auto; align-self:center; }
+.fhs-chips{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:6px 0 10px; }
+.fhs-lead{ font-size:.85rem; color:var(--muted); }
+.fhs-chip{ font:inherit; font-size:.82rem; padding:4px 10px; border-radius:999px; border:1px solid var(--panel-line); background:var(--accent-tint2,var(--accent-tint2, #EADFF5)); color:var(--ink); cursor:pointer; }
+.fhs-card{ margin:12px 0; padding:12px 14px; border-radius:14px; border:1px solid var(--panel-line); background:var(--accent-tint,var(--accent-tint, #F3EEF8)); }
+.fhs-card h4{ margin:0 0 2px; font-size:1.02rem; }
+.fhs-meta{ font-size:.82rem; color:var(--muted); margin-bottom:8px; }
+.fhs-ings{ list-style:none; margin:0 0 8px; padding:0; font-size:.92rem; }
+.fhs-ings li{ padding:2px 0; }
+.fhs-steps{ margin:0 0 6px 1.1em; padding:0; font-size:.92rem; line-height:1.45; }
+.fhs-steps li{ margin-bottom:4px; }
+.fhs-tip{ margin:4px 0 0; font-size:.85rem; color:var(--muted); }
+
 </style>
 <script>/* ==================== THEME: colour palettes + light / dark / auto ==================== */
 /* Runs in <head> so the right colours are in place before the first paint. */
@@ -3163,11 +3178,23 @@ const FHRecipes = (function(){
     };
     const steps = h('ol', { class:'fhr-steps' });
     const ingList = h('ul', { class:'fhr-ings' });
-    (meal.ingredients || []).forEach(i => {
-      const lc = FHLocale.qty(i.qty * scale, i.unit);
-      const q = lc ? lc.n : niceQty(i.qty * scale, i.unit), u = lc ? lc.u : plural(FHLocale.unit(i.unit), i.qty * scale);
-      ingList.appendChild(h('li', {}, h('span', { class:'fhr-iq', text:(q + (u ? ' ' + u : '')) }), h('span', { text:' ' + i.name })));
-    });
+    const scratchHost = h('div', { class:'fhr-scratch-host' });
+    const fmtQ = (n, unit) => { const lc = FHLocale.qty(n, unit); const q = lc ? lc.n : niceQty(n, unit), u = lc ? lc.u : plural(FHLocale.unit(unit), n); return q + (u ? ' ' + u : ''); };
+    const renderIngs = () => {
+      ingList.innerHTML = ''; scratchHost.innerHTML = '';
+      (meal.ingredients || []).forEach(i => {
+        // Always show the TOTAL for everyone eating. Meat lines set as a per-person portion are multiplied up by the number of people.
+        const tot = i.perPerson ? i.qty * size : i.qty * scale;
+        const rawName = FHScratch.raw(i), canMake = !!FHScratch.recipeFor(i), making = canMake && FHScratch.has(rawName);
+        const li = making
+          ? h('li', {}, h('span', { class:'fhr-iq', text:'🥣' }), h('span', { text:' Homemade ' + i.name.toLowerCase() + ' (recipe below)' }))
+          : h('li', {}, h('span', { class:'fhr-iq', text:fmtQ(tot, i.unit) }), h('span', { text:' ' + i.name }));
+        if(canMake) li.appendChild(h('button', { type:'button', class:'fhs-btn', text: making ? 'Use a ' + i.unit : '🥣 From scratch', onClick:() => { FHScratch.set(rawName, !making); renderIngs(); } }));
+        ingList.appendChild(li);
+        if(making){ const c = FHScratch.card(i, size, scale, fmtQ); if(c) scratchHost.appendChild(c); }
+      });
+    };
+    renderIngs();
     left.appendChild(h('div', { class:'fhr-chips' },
       h('span', { class:'fhr-b time', text:'⏱ Ready in ' + fmtMin(total(r)) }),
       h('span', { class:'fhr-b hands', text:'✋ ' + fmtMin(hands(r)) + ' hands-on' }),
@@ -3175,6 +3202,7 @@ const FHRecipes = (function(){
     left.appendChild(h('div', { class:'fhr-tags' }, tagBits.map(t => h('span', { class:'fhr-tag', text:tagLabel(t) }))));
     left.appendChild(h('h3', { class:'fhr-h', text:'Ingredients · ' + size + (size === 1 ? ' person' : ' people') }));
     left.appendChild(ingList);
+    left.appendChild(scratchHost);
     right.appendChild(h('h3', { class:'fhr-h', text:'Method' }));
     right.appendChild(seg);
     right.appendChild(steps);
@@ -3197,6 +3225,76 @@ const FHRecipes = (function(){
   return { get, total, hands, fmtMin, dietTags, passes, state, filterBar, mountFilter, activeCount, reset, timeSuffix, badges, cardBits, open, close, startTimer };
 })();
 FHLocale.applyRecipes();
+
+/* ==================== FROM-SCRATCH versions of shop-bought pastes, sauces and bases ==================== */
+const FH_SCRATCH = {"Tikka masala paste":{"unit":"jar","makes":1,"mins":10,"keeps":"Keeps 5 days in the fridge, or freeze in portions for up to 3 months","ingredients":[["Garlic",4,"clove","produce"],["Fresh ginger",1,"piece","produce"],["Garam masala",2,"tsp","store-cupboard"],["Ground cumin",1,"tsp","store-cupboard"],["Ground coriander",1,"tsp","store-cupboard"],["Paprika",2,"tsp","store-cupboard"],["Chilli powder",1,"tsp","store-cupboard"],["Tomato purée",2,"tbsp","store-cupboard"],["Lemon",0.5,"each","produce"],["Olive oil",2,"tbsp","store-cupboard"]],"steps":["Peel the garlic and ginger, then roughly chop them.","Blitz everything with a splash of water to a thick, smooth paste, scraping down the sides.","Fry the paste in a hot pan for 2 minutes until fragrant, before adding the chicken and sauce.","Stir in a little water if the paste sticks while frying."],"tip":"No fish or shellfish, and no soy needed."},"Korma paste":{"unit":"jar","makes":1,"mins":10,"keeps":"Keeps 5 days in the fridge, or freeze in portions for up to 3 months","ingredients":[["Garlic",3,"clove","produce"],["Fresh ginger",1,"piece","produce"],["Ground almonds",40,"g","store-cupboard"],["Ground coriander",2,"tsp","store-cupboard"],["Ground cumin",1,"tsp","store-cupboard"],["Ground turmeric",0.5,"tsp","store-cupboard"],["Garam masala",1,"tsp","store-cupboard"],["Lemon",0.5,"each","produce"],["Olive oil",2,"tbsp","store-cupboard"]],"steps":["Peel and roughly chop the garlic and ginger.","Blitz with the ground almonds, spices, lemon juice and oil, adding a splash of water, until smooth.","Fry the paste in a pan over a medium heat for 2 minutes until it smells fragrant.","Add your yoghurt or coconut milk afterwards, never before frying."],"tip":"Mild by design; contains nuts, so check for allergies."},"Rogan josh paste":{"unit":"jar","makes":1,"mins":10,"keeps":"Keeps 5 days in the fridge, or freeze in portions for up to 3 months","ingredients":[["Onion",1,"each","produce"],["Garlic",4,"clove","produce"],["Fresh ginger",1,"piece","produce"],["Paprika",2,"tsp","store-cupboard"],["Chilli powder",1,"tsp","store-cupboard"],["Ground cumin",1,"tsp","store-cupboard"],["Ground coriander",2,"tsp","store-cupboard"],["Garam masala",1,"tsp","store-cupboard"],["Ground cinnamon",0.5,"tsp","store-cupboard"],["Tomato purée",2,"tbsp","store-cupboard"],["Olive oil",2,"tbsp","store-cupboard"]],"steps":["Peel and roughly chop the onion, garlic and ginger.","Blitz everything with a splash of water to a thick, smooth paste.","Fry the paste in a hot pan for 3 minutes, stirring, until deep red and fragrant.","Add your lamb or vegetables and browned meat juices to build the sauce."],"tip":"Cut the chilli powder in half for a gentler curry."},"Thai green curry paste":{"unit":"jar","makes":1,"mins":10,"keeps":"Keeps 5 days in the fridge, or freeze in portions for up to 3 months","ingredients":[["Green chilli",3,"each","produce"],["Garlic",3,"clove","produce"],["Fresh ginger",1,"piece","produce"],["Spring onions",1,"bunch","produce"],["Fresh coriander",1,"bunch","produce"],["Lime",1,"each","produce"],["Ground coriander",1,"tsp","store-cupboard"],["Ground cumin",0.5,"tsp","store-cupboard"],["Soy sauce",1,"tbsp","store-cupboard"],["Vegetable oil",1,"tbsp","store-cupboard"]],"steps":["Trim the chillies and spring onions, and peel the garlic and ginger. Zest and juice the lime.","Blitz everything including the coriander stalks to a coarse paste, adding water to loosen.","Fry the paste in a hot pan for 2 minutes until it smells fragrant, then add coconut milk.","Seeds in the chillies add heat, so remove them for a milder paste."],"tip":"Soy sauce replaces fish sauce and shrimp paste, so this paste has no fish or shellfish. Contains soy and wheat."},"Massaman curry paste":{"unit":"jar","makes":1,"mins":10,"keeps":"Keeps 5 days in the fridge, or freeze in portions for up to 3 months","ingredients":[["Onion",1,"each","produce"],["Garlic",4,"clove","produce"],["Fresh ginger",1,"piece","produce"],["Ground coriander",2,"tsp","store-cupboard"],["Ground cumin",1,"tsp","store-cupboard"],["Ground cinnamon",0.5,"tsp","store-cupboard"],["Chilli powder",1,"tsp","store-cupboard"],["Lemon",0.5,"each","produce"],["Soy sauce",1,"tbsp","store-cupboard"],["Vegetable oil",2,"tbsp","store-cupboard"]],"steps":["Peel and roughly chop the onion, garlic and ginger.","Blitz with the spices, lemon zest and juice, soy sauce and oil, adding a splash of water, until smooth.","Fry the paste in a hot pan for 3 minutes until darker and fragrant, then add coconut milk.","Soy sauce is used instead of fish sauce and shrimp paste, so there is no fish or shellfish."],"tip":"Contains soy and wheat."},"BBQ sauce":{"unit":"jar","makes":1,"mins":20,"keeps":"Keeps 5 days in the fridge","ingredients":[["Ketchup",6,"tbsp","store-cupboard"],["Light brown sugar",2,"tbsp","store-cupboard"],["Rice vinegar",1,"tbsp","store-cupboard"],["Soy sauce",1,"tbsp","store-cupboard"],["Tomato purée",1,"tbsp","store-cupboard"],["Smoked paprika",2,"tsp","store-cupboard"],["Garlic",1,"clove","produce"]],"steps":["Crush the garlic and put everything in a small pan with 4 tbsp water.","Bring to a gentle bubble, then simmer for 10 minutes, stirring, until glossy and thickened.","Taste and add a little more sugar or vinegar if you like.","Cool fully before using as a marinade or storing in a clean jar."],"tip":"Soy sauce stands in for Worcestershire sauce, which contains anchovies."},"Green pesto":{"unit":"jar","makes":1,"mins":10,"keeps":"Keeps 4 days in the fridge under a layer of oil","ingredients":[["Fresh basil",1,"bunch","produce"],["Parmesan",40,"g","dairy-chilled"],["Pine nuts",40,"g","store-cupboard"],["Garlic",1,"clove","produce"],["Lemon",0.5,"each","produce"],["Olive oil",6,"tbsp","store-cupboard"]],"steps":["Toast the pine nuts in a dry pan for 2 minutes until golden, then cool.","Finely grate the parmesan and peel the garlic.","Blitz the basil, nuts, parmesan, garlic and lemon juice, drizzling in the oil until you have a rough paste.","Stir through hot pasta with a spoonful of the cooking water."],"tip":"Swap pine nuts for sunflower seeds if you prefer."},"Salsa":{"unit":"jar","makes":1,"mins":10,"keeps":"Keeps 3 days in the fridge","ingredients":[["Tomatoes",4,"each","produce"],["Red onion",0.5,"each","produce"],["Red chilli",1,"each","produce"],["Fresh coriander",0.5,"bunch","produce"],["Lime",1,"each","produce"],["Garlic",1,"clove","produce"]],"steps":["Finely chop the tomatoes, onion and chilli, discarding the chilli seeds for less heat.","Crush the garlic and chop the coriander leaves.","Mix everything with the lime juice and leave to stand for 10 minutes so the flavours come together.","Drain off any watery juice before serving."]},"Tartare sauce":{"unit":"jar","makes":1,"mins":10,"keeps":"Keeps 3 days in the fridge","ingredients":[["Mayonnaise",6,"tbsp","store-cupboard"],["Gherkins",30,"g","store-cupboard"],["Capers",1,"tbsp","store-cupboard"],["Fresh parsley",0.5,"bunch","produce"],["Lemon",0.5,"each","produce"]],"steps":["Finely chop the gherkins, capers and parsley leaves.","Stir them into the mayonnaise with a squeeze of lemon juice.","Taste and add more lemon if it needs sharpness.","Chill for 10 minutes before serving with fish or chips."],"tip":"Use shop-bought pasteurised mayonnaise, not raw egg."},"Caesar dressing":{"unit":"jar","makes":1,"mins":10,"keeps":"Keeps 5 days in the fridge","ingredients":[["Mayonnaise",3,"tbsp","store-cupboard"],["Greek yoghurt",50,"g","dairy-chilled"],["Parmesan",20,"g","dairy-chilled"],["Garlic",1,"clove","produce"],["Lemon",1,"each","produce"],["Dijon mustard",1,"tsp","store-cupboard"],["Soy sauce",0.5,"tbsp","store-cupboard"]],"steps":["Finely grate the parmesan and crush the garlic to a paste.","Whisk with the mayonnaise, yoghurt, mustard, soy sauce and lemon juice until smooth.","Loosen with a splash of water to a pouring consistency, then season with black pepper.","Soy sauce replaces the usual anchovy, so there is no raw egg and no fish."],"tip":"Made with shop-bought pasteurised mayonnaise."},"Mint sauce":{"unit":"jar","makes":1,"mins":10,"keeps":"Keeps 5 days in the fridge","ingredients":[["Fresh mint",1,"bunch","produce"],["Caster sugar",1,"tbsp","store-cupboard"],["White wine vinegar",3,"tbsp","store-cupboard"]],"steps":["Strip the mint leaves from the stalks and chop them very finely.","Stir the sugar into 2 tbsp just-boiled water until dissolved.","Add the mint and vinegar, then leave to infuse for 10 minutes.","Taste and add a little more sugar or vinegar to balance."]},"Apple sauce":{"unit":"jar","makes":1,"mins":25,"keeps":"Keeps 5 days in the fridge, or freeze for up to 3 months","ingredients":[["Cooking apples",3,"each","produce"],["Lemon",0.5,"each","produce"],["Caster sugar",1,"tbsp","store-cupboard"],["Butter",10,"g","dairy-chilled"]],"steps":["Peel, core and chop the apples, tossing them in the lemon juice.","Simmer with the sugar, butter and 3 tbsp water, lid on, for 15 minutes until completely soft.","Mash with a fork for a chunky sauce, or blitz once cooled slightly for a smooth one.","Cool before storing."]},"Hummus":{"unit":"tub","makes":1,"mins":10,"keeps":"Keeps 4 days in the fridge","ingredients":[["Chickpeas",1,"tin","store-cupboard"],["Tahini",2,"tbsp","store-cupboard"],["Lemon",1,"each","produce"],["Garlic",1,"clove","produce"],["Olive oil",2,"tbsp","store-cupboard"],["Ground cumin",0.5,"tsp","store-cupboard"]],"steps":["Drain the chickpeas, keeping 4 tbsp of the liquid.","Blitz the chickpeas with tahini, lemon juice, garlic, cumin and the oil until thick.","Add the chickpea liquid a spoonful at a time, blitzing until silky smooth.","Taste, adjust the lemon, and finish with a drizzle of oil."]},"Garlic yoghurt sauce":{"unit":"g","makes":200,"mins":5,"keeps":"Keeps 3 days in the fridge","ingredients":[["Greek yoghurt",200,"g","dairy-chilled"],["Garlic",1,"clove","produce"],["Lemon",0.5,"each","produce"],["Olive oil",1,"tbsp","store-cupboard"],["Fresh mint",0.5,"bunch","produce"]],"steps":["Crush the garlic to a smooth paste and chop the mint leaves.","Stir into the yoghurt with the lemon juice and oil.","Season with black pepper, taste, and add more lemon if you like.","Chill until needed."]},"Pizza bases":{"unit":"each","makes":4,"mins":100,"keeps":"Use the same day, or chill covered for up to 1 day","ingredients":[["Strong white bread flour",400,"g","store-cupboard"],["Fast-action dried yeast",1,"sachet","store-cupboard"],["Caster sugar",0.5,"tbsp","store-cupboard"],["Salt",2,"tsp","store-cupboard"],["Olive oil",2,"tbsp","store-cupboard"]],"steps":["Mix the flour, yeast, sugar and salt, then stir in the oil and 260ml warm water to a rough dough.","Knead for 8 minutes on a floured surface until smooth and springy.","Cover and leave in a warm spot for 1 hour, unattended, until doubled in size.","Divide into 4, then roll or stretch each to about 24cm.","Top and bake at 240C (220C fan) for 8 to 10 minutes until the edges are golden."],"tip":"Chilling the dough overnight in the fridge gives more flavour."},"Teriyaki sauce":{"unit":"tbsp","makes":4,"mins":10,"keeps":"Keeps 5 days in the fridge","ingredients":[["Soy sauce",2,"tbsp","store-cupboard"],["Honey",1,"tbsp","store-cupboard"],["Rice vinegar",1,"tbsp","store-cupboard"],["Fresh ginger",0.5,"piece","produce"],["Garlic",1,"clove","produce"],["Cornflour",0.5,"tbsp","store-cupboard"]],"steps":["Grate the ginger and crush the garlic.","Mix the cornflour with 1 tbsp cold water until smooth.","Simmer everything else with 2 tbsp water for 2 minutes, then stir in the cornflour paste.","Cook for 1 minute until glossy and thickened."],"tip":"Contains soy and wheat."},"Sweet chilli sauce":{"unit":"tbsp","makes":4,"mins":12,"keeps":"Keeps 5 days in the fridge","ingredients":[["Red chilli",1,"each","produce"],["Garlic",1,"clove","produce"],["Caster sugar",1.5,"tbsp","store-cupboard"],["Rice vinegar",2,"tbsp","store-cupboard"],["Cornflour",0.5,"tbsp","store-cupboard"]],"steps":["Finely chop the chilli, removing the seeds for less heat, and crush the garlic.","Simmer with the sugar, vinegar and 3 tbsp water for 4 minutes until the sugar dissolves.","Stir in the cornflour mixed with 1 tbsp cold water and bubble for 1 minute until sticky.","Cool before using; it thickens further as it cools."]}};
+
+/* ==================== FROM SCRATCH: make a paste or sauce instead of buying the jar ==================== */
+/* Per-name choice, kept in the household settings (so it syncs). When on, the shopping list swaps the jar
+   for the ingredients to make it, and the recipe shows the "make it" steps. */
+const FHScratch = (function(){
+  const KEY = 'family-hub-scratch-v1';
+  let used = {};
+  function raw(line){ return line._n0 || line.name; }
+  function load(){ try{ const v = JSON.parse(fhRawGet(KEY) || '[]'); return Array.isArray(v) ? v : []; }catch(e){ return []; } }
+  function has(name){ return load().indexOf(name) >= 0; }
+  function set(name, on){
+    const a = load().filter(function(x){ return x !== name; });
+    if(on) a.push(name);
+    fhSaveJSON(KEY, a);
+  }
+  function recipeFor(line){
+    const r = FH_SCRATCH[raw(line)];
+    return (r && r.unit === line.unit) ? r : null;
+  }
+  function totalQty(line, d){ return (line.qty || 0) * (line.perPerson ? d.serves : d.scale); }
+  function beginBuild(){ used = {}; }
+  // Swap each switched-on line for its ingredients. `abs` marks quantities that are already totals.
+  function expand(lines, d){
+    const out = [];
+    lines.forEach(function(l){
+      const r = recipeFor(l);
+      if(r && has(raw(l))){
+        used[raw(l)] = true;
+        const f = totalQty(l, d) / r.makes;
+        r.ingredients.forEach(function(c){
+          out.push({ name:FHLocale.name(c[0]), qty:c[1] * f, unit:c[2], section:c[3], shelfLifeDays:c[4] || null, abs:true });
+        });
+      } else out.push(l);
+    });
+    return out;
+  }
+  // A small button for a shopping-list row, or null when that item has no from-scratch version.
+  function rowButton(item, redo){
+    const name = item.raw || item.name, r = FH_SCRATCH[name];
+    if(!r || r.unit !== item.unit) return null;
+    return h('button', { type:'button', class:'fhs-btn', text:'🥣 Make it', title:'Swap the ' + item.unit + ' for the ingredients to make it', onClick:function(e){ e.stopPropagation(); set(name, true); redo(); } });
+  }
+  // Shown above the list: what is being made instead of bought this week, each with an undo.
+  function chips(redo){
+    const names = Object.keys(used);
+    if(!names.length) return null;
+    return h('div', { class:'fhs-chips' }, h('span', { class:'fhs-lead', text:'Making yourself:' }),
+      names.map(function(n){
+        return h('button', { type:'button', class:'fhs-chip', title:'Go back to buying it', text:FHLocale.name(n) + ' ✕', onClick:function(){ set(n, false); redo(); } });
+      }));
+  }
+  // The "make it" card in the recipe sheet. fmt(qty, unit) -> display text.
+  function card(line, size, scale, fmt){
+    const r = recipeFor(line); if(!r) return null;
+    const f = totalQty(line, { serves:size, scale:scale }) / r.makes;
+    const pretty = FHLocale.name(raw(line));
+    return h('div', { class:'fhs-card' },
+      h('h4', { text:'🥣 Homemade ' + pretty.toLowerCase() }),
+      h('div', { class:'fhs-meta', text:'About ' + r.mins + ' min' + (r.keeps ? ' · ' + r.keeps : '') }),
+      h('ul', { class:'fhs-ings' }, r.ingredients.map(function(c){
+        return h('li', {}, h('span', { class:'fhr-iq', text:fmt(c[1] * f, c[2]) }), h('span', { text:' ' + FHLocale.name(c[0]) }));
+      })),
+      h('ol', { class:'fhs-steps' }, r.steps.map(function(s){ return h('li', { text:FHLocale.text ? FHLocale.text(s) : s }); })),
+      r.tip ? h('p', { class:'fhs-tip', text:'Tip: ' + r.tip }) : null);
+  }
+  return { has, set, recipeFor, raw, beginBuild, expand, rowButton, chips, card };
+})();
 
 // ==================== MEAL PLAN MODULE ====================
 const MealApp = (function(){
@@ -5482,16 +5580,17 @@ function shopCycleDays(anchor){
 function buildShoppingList(anchor){
   anchor = anchor || currentShopCycleAnchor();
   const days = shopCycleDays(anchor);
+  FHScratch.beginBuild();
   const lineMap = {}; // key: name|unit -> { key, name, unit, section, qty, shelfLifeDays, uses:[{mealName,date}] }
   days.forEach(d=>{
     if(!d.meal || !Array.isArray(d.meal.ingredients)) return;
-    d.meal.ingredients.forEach(line=>{
+    FHScratch.expand(d.meal.ingredients, d).forEach(line=>{
       const key = line.name.trim().toLowerCase() + '|' + (line.unit||'').trim().toLowerCase();
       if(!lineMap[key]){
-        lineMap[key] = { key: key, name: line.name, unit: line.unit, section: line.section || 'other', qty: 0, shelfLifeDays: null, uses: [] };
+        lineMap[key] = { key: key, raw: line._n0 || line.name, name: line.name, unit: line.unit, section: line.section || 'other', qty: 0, shelfLifeDays: null, uses: [] };
       }
       const entry = lineMap[key];
-      entry.qty += (line.qty || 0) * (line.perPerson ? d.serves : d.scale);
+      entry.qty += (line.qty || 0) * (line.abs ? 1 : (line.perPerson ? d.serves : d.scale));
       if(line.shelfLifeDays){
         entry.shelfLifeDays = entry.shelfLifeDays ? Math.min(entry.shelfLifeDays, line.shelfLifeDays) : line.shelfLifeDays;
       }
@@ -5720,6 +5819,7 @@ function renderShoppingListPage(container){
     return;
   }
 
+  { const sc = FHScratch.chips(()=>renderShoppingListPage(container)); if(sc) container.appendChild(sc); }
   SHOP_SECTIONS.forEach(section=>{
     const items = bySection[section.id];
     if(!items.length) return;
@@ -5755,6 +5855,7 @@ function renderShoppingListPage(container){
       uses.textContent = Array.from(new Set(item.uses.map(u=>u.mealName))).join(', ');
       info.appendChild(uses);
       row.appendChild(info);
+      { const sb = FHScratch.rowButton(item, ()=>renderShoppingListPage(container)); if(sb) row.appendChild(sb); }
 
       if(section.id === 'meat-fish'){
         const expiryWrap = document.createElement('label');
@@ -8883,7 +8984,7 @@ function showAllSet(){
   });
 }
 
-const FH_APP_VERSION = '0.14 (test build, sync)';
+const FH_APP_VERSION = '0.16 (test build)';
 function fhFeedbackNote(){
   const L=[]; const add=(k,v)=>L.push(k+': '+v);
   add('App', 'Family Hub '+FH_APP_VERSION);
@@ -9242,7 +9343,7 @@ const FHSync = (function(){
   const ST_KEY  = 'fhsync:state';     // sign-in + sync bookkeeping; never exported in backups, never synced
   const BUILD = (typeof FH_SYNC_BUILD !== 'undefined' && FH_SYNC_BUILD && FH_SYNC_BUILD.url) ? FH_SYNC_BUILD : null;
   const SHARED_EXACT = { 'family-hub-config-v1':1, 'family-hub-locale-v1':1, 'family-hub-meal-rules-v1':1,
-                         'family-hub-hidden-meals-v1':1, 'family-hub-starter-chores-v1':1, 'family-hub-starter-plan-v1':1 };
+                         'family-hub-hidden-meals-v1':1, 'family-hub-scratch-v1':1, 'family-hub-starter-chores-v1':1, 'family-hub-starter-plan-v1':1 };
   // Per-device settings (parent PIN, theme, kitchen display, running timers, setup draft) are deliberately NOT shared.
   function eligible(k){ return !!SHARED_EXACT[k] || k.indexOf('brick-bites-') === 0 || k.indexOf('chore-chart-') === 0; }
 
