@@ -2022,13 +2022,18 @@ var FHTheme = (function(){
     set('--white', e.white); set('--shadow', e.shadow); set('--good', e.good); set('--good-tint', e.goodt); set('--star', e.star);
     r.colorScheme = dark ? 'dark' : 'light';
     try{ document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light'); }catch(x){}
-    try{ var m = document.querySelector('meta[name="theme-color"]'); if(m) m.setAttribute('content', dark ? DARK.cream : p.a); }catch(x){}
+    try{
+      var m = document.querySelector('meta[name="theme-color"]');
+      if(!m && document.head){ m = document.createElement('meta'); m.setAttribute('name','theme-color'); document.head.appendChild(m); }
+      var all = document.querySelectorAll('meta[name="theme-color"]'); for(var i=0;i<all.length;i++) all[i].setAttribute('content', dark ? DARK.cream : p.a);
+    }catch(x){}
   }
   function set(patch){
     cur = load(); if(patch.palette && PALETTES[patch.palette]) cur.palette = patch.palette; if(patch.mode) cur.mode = patch.mode;
     try{ localStorage.setItem(KEY, JSON.stringify(cur)); }catch(e){}
     apply();
   }
+  try{ document.addEventListener('DOMContentLoaded', apply); window.addEventListener('pageshow', apply); }catch(e){}
   try{ apply(); if(window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(){ if(load().mode === 'auto') apply(); }); }catch(e){}
   return { get:function(){ return cur || load(); }, set:set, palettes:PALETTES, isDark:function(){ return isDark((cur || load()).mode); } };
 })();
@@ -8240,6 +8245,7 @@ const OBW = (function(){
     return [
       h('div',{class:'ob-hero'},'🏡'),
       ...title(mode==='rerun' ? 'Set up again' : 'Welcome to Family Hub', 'A few quick questions and your hub is ready: your people, your rooms, suggested chores and a meal plan that fills in your shopping list. Takes about three minutes — you can change anything later.'),
+      (mode!=='rerun' && FHSync.summary().configured) ? h('div',{class:'ob-row',style:'margin-top:14px'}, h('button',{type:'button',class:'ob-btn ghost',id:'obSyncLink',text:'I already use Family Hub on another device',onClick:()=>fhSyncSignInModal()})) : null,
       mode==='rerun' ? h('div',{class:'ob-warn'},'⚠️ Finishing this replaces your current people, chores, meal plan and ticks. Export a backup from Settings first if you want to keep them.') : null
     ];
   }
@@ -8831,6 +8837,7 @@ function renderSettingsPage(){
     h('p',{class:'ob-hint',text:'Save everything to a file, or restore from one. Handy before re-running setup or moving to a new phone.'}),
     h('div',{class:'ob-row'}, h('button',{type:'button',class:'ob-btn ghost',id:'stExport',text:'⬇️ Export backup',onClick:fhExportBackup}),
       h('button',{type:'button',class:'ob-btn ghost',text:'⬆️ Import backup',onClick:()=>file.click()})), file, msg));
+  root.appendChild(fhSyncCard());
   root.appendChild(feedbackCard());
   root.appendChild(h('div',{class:'st-card'}, h('h3',{text:'Setup'}),
     h('p',{class:'ob-hint',text:'Run the setup questions again to start fresh with a new household, rooms, chores and meal plan.'}),
@@ -8838,6 +8845,7 @@ function renderSettingsPage(){
       h('button',{type:'button',class:'ob-btn ghost',id:'stRerun',text:'🔁 Run setup again',onClick:()=>OBW.open('rerun')}),
       h('button',{type:'button',class:'ob-btn ghost',id:'stReset',text:'🗑️ Erase everything',onClick:()=>{
         if(!confirm('Erase ALL data in this app and start from the very beginning? Export a backup first if you might want it.')) return;
+        try{ FHSync.disconnect(); }catch(e){}
         const rm = []; for(let i=0;i<localStorage.length;i++){ const k = localStorage.key(i); if(k && k.indexOf(STORAGE_PREFIX)===0) rm.push(k); }
         rm.forEach(k=>localStorage.removeItem(k));
         try{ sessionStorage.removeItem(FH_JUST_KEY); }catch(e){}
@@ -8875,7 +8883,7 @@ function showAllSet(){
   });
 }
 
-const FH_APP_VERSION = '0.13 (test build)';
+const FH_APP_VERSION = '0.14 (test build, sync)';
 function fhFeedbackNote(){
   const L=[]; const add=(k,v)=>L.push(k+': '+v);
   add('App', 'Family Hub '+FH_APP_VERSION);
@@ -9222,6 +9230,404 @@ const FHLock = (function(){
   applyState();
   return { isSet, isLocked, lock, unlock, settingsCard };
 })();
+
+const FH_SYNC_BUILD = null;
+/* ==================== SYNC: household sync across devices (Supabase) ==================== */
+/* Every synced setting is a key/value pair in a shared household. Each device keeps working offline from its
+   own copy; changes are pushed a couple of seconds after they happen and pulled when the app is opened,
+   every 30 seconds while it is open, and when the connection comes back.
+   Nothing here uses a library: plain fetch against Supabase Auth (email code) and PostgREST. */
+const FHSync = (function(){
+  const CFG_KEY = 'fhsync:cfg';       // pasted connection (developer use); outside the app's storage prefix
+  const ST_KEY  = 'fhsync:state';     // sign-in + sync bookkeeping; never exported in backups, never synced
+  const BUILD = (typeof FH_SYNC_BUILD !== 'undefined' && FH_SYNC_BUILD && FH_SYNC_BUILD.url) ? FH_SYNC_BUILD : null;
+  const SHARED_EXACT = { 'family-hub-config-v1':1, 'family-hub-locale-v1':1, 'family-hub-meal-rules-v1':1,
+                         'family-hub-hidden-meals-v1':1, 'family-hub-starter-chores-v1':1, 'family-hub-starter-plan-v1':1 };
+  // Per-device settings (parent PIN, theme, kitchen display, running timers, setup draft) are deliberately NOT shared.
+  function eligible(k){ return !!SHARED_EXACT[k] || k.indexOf('brick-bites-') === 0 || k.indexOf('chore-chart-') === 0; }
+
+  /* ---------- state ---------- */
+  let st = loadState(), applying = false, busy = false, pushTimer = null, pollTimer = null, listeners = [], lastErr = '';
+  function blank(){ return { auth:null, hh:null, seq:0, keys:{}, last:0 }; }
+  function loadState(){ try{ const v = JSON.parse(localStorage.getItem(ST_KEY) || 'null'); return v && v.keys ? v : blank(); }catch(e){ return blank(); } }
+  function save(){ try{ localStorage.setItem(ST_KEY, JSON.stringify(st)); }catch(e){} }
+  function config(){
+    if(BUILD) return BUILD;
+    try{ const c = JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); return c && c.url && c.key ? c : null; }catch(e){ return null; }
+  }
+  function setConfig(text){
+    const parts = String(text || '').trim().split('|');
+    const url = (parts[0] || '').trim().replace(/\/+$/, ''), key = (parts[1] || '').trim();
+    if(!/^(https:\/\/[a-z0-9.-]+|http:\/\/localhost:\d+)$/i.test(url) || key.length < 20) return false;
+    try{ localStorage.setItem(CFG_KEY, JSON.stringify({ url:url, key:key })); }catch(e){ return false; }
+    emit(); return true;
+  }
+  function mode(){ if(!config()) return 'off'; if(!st.auth) return 'signedout'; if(!st.hh) return 'nohh'; return 'ok'; }
+  function active(){ return mode() === 'ok'; }
+  function emit(){ listeners.slice().forEach(function(f){ try{ f(); }catch(e){} }); }
+  function onChange(f){ listeners.push(f); return function(){ listeners = listeners.filter(function(x){ return x !== f; }); }; }
+  function ent(k){ return st.keys[k] || (st.keys[k] = { rev:0, base:null, dirty:false }); }
+  function localVal(k){ return fhRawGet(k); }
+  function localKeys(){
+    const out = [];
+    for(let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if(k && k.indexOf(STORAGE_PREFIX) === 0 && eligible(k.slice(STORAGE_PREFIX.length))) out.push(k.slice(STORAGE_PREFIX.length)); }
+    return out;
+  }
+  function writeLocal(k, v){ applying = true; try{ fhRawSet(k, v); }finally{ applying = false; } }
+
+  /* ---------- 3-way merge: keeps changes made on both devices when they touch different things ---------- */
+  function jparse(s){ try{ return JSON.parse(s); }catch(e){ return undefined; } }
+  function isObj(x){ return x && typeof x === 'object' && !Array.isArray(x); }
+  function hasIds(a){ return a.every(function(x){ return isObj(x) && (typeof x.id === 'string' || typeof x.id === 'number'); }); }
+  function same(a, b){ return JSON.stringify(a) === JSON.stringify(b); }
+  function merge3(baseS, localS, remoteS){
+    const L = jparse(localS), R = jparse(remoteS), B = baseS == null ? undefined : jparse(baseS);
+    if(L === undefined || R === undefined) return localS;                       // not JSON: the later writer wins
+    if(isObj(L) && isObj(R)){
+      const b = isObj(B) ? B : {}, out = Object.assign({}, R);
+      Object.keys(Object.assign({}, L, b)).forEach(function(k){
+        if(same(L[k], b[k])) return;                                              // untouched here: keep theirs
+        if(L[k] === undefined) delete out[k]; else out[k] = L[k];                 // changed here: keep ours
+      });
+      return JSON.stringify(out);
+    }
+    if(Array.isArray(L) && Array.isArray(R) && hasIds(L) && hasIds(R) && (B === undefined || (Array.isArray(B) && hasIds(B)))){
+      const b = B || [], bm = {}, lm = {}, seen = {};
+      b.forEach(function(x){ bm[x.id] = x; }); L.forEach(function(x){ lm[x.id] = x; });
+      const out = [];
+      R.forEach(function(x){
+        seen[x.id] = 1;
+        const was = bm[x.id], mine = lm[x.id];
+        if(was !== undefined && mine === undefined) return;                       // I deleted it
+        if(mine !== undefined && !same(mine, was)) out.push(mine); else out.push(x);
+      });
+      L.forEach(function(x){ if(!seen[x.id] && bm[x.id] === undefined) out.push(x); });  // added here
+      return JSON.stringify(out);
+    }
+    return localS;
+  }
+
+  /* ---------- network ---------- */
+  function fail(msg, offline){ const e = new Error(msg); e.offline = !!offline; return e; }
+  async function http(url, opts){
+    let r;
+    try{ r = await fetch(url, opts); }catch(e){ throw fail('You appear to be offline.', true); }
+    let body = null; try{ body = await r.json(); }catch(e){}
+    if(!r.ok){
+      const msg = (body && (body.msg || body.message || body.error_description || body.error)) || ('Server said ' + r.status);
+      const e = fail(msg, false); e.status = r.status; throw e;
+    }
+    return body;
+  }
+  function authCall(path, payload){
+    const c = config();
+    return http(c.url + '/auth/v1/' + path, { method:'POST', headers:{ apikey:c.key, 'Content-Type':'application/json' }, body:JSON.stringify(payload) });
+  }
+  function takeSession(s){
+    st.auth = { access:s.access_token, refresh:s.refresh_token, exp: Date.now() + ((s.expires_in || 3600) * 1000), email: (s.user && s.user.email) || (st.auth && st.auth.email) || '' };
+    save();
+  }
+  async function token(){
+    if(!st.auth) throw fail('Not signed in.', false);
+    if(st.auth.exp - Date.now() > 60000) return st.auth.access;
+    try{ takeSession(await authCall('token?grant_type=refresh_token', { refresh_token: st.auth.refresh })); }
+    catch(e){ if(!e.offline){ st.auth = null; save(); emit(); } throw e; }
+    return st.auth.access;
+  }
+  async function api(path, opts, retried){
+    const c = config(), t = await token();
+    const o = Object.assign({}, opts || {}); o.headers = Object.assign({ apikey:c.key, Authorization:'Bearer ' + t, 'Content-Type':'application/json' }, o.headers || {});
+    try{ return await http(c.url + '/rest/v1/' + path, o); }
+    catch(e){ if(e.status === 401 && !retried){ st.auth.exp = 0; return api(path, opts, true); } throw e; }
+  }
+  function rpc(name, args){ return api('rpc/' + name, { method:'POST', body:JSON.stringify(args || {}) }); }
+
+  /* ---------- sign-in ---------- */
+  async function sendCode(email){
+    email = String(email || '').trim().toLowerCase();
+    if(!/^\S+@\S+\.\S+$/.test(email)) throw fail('That email address does not look right.', false);
+    await authCall('otp', { email:email, create_user:true });
+    return email;
+  }
+  async function verify(email, code){
+    code = String(code || '').replace(/\s+/g, '');
+    if(!/^\d{4,10}$/.test(code)) throw fail('Enter the numeric code from the email.', false);
+    takeSession(await authCall('verify', { type:'email', email:email, token:code }));
+    st.auth.email = email; save();
+    await refreshHousehold();
+    emit();
+    return mode();
+  }
+  async function refreshHousehold(){
+    const h = await rpc('my_household');
+    st.hh = h || null; save(); emit();
+    return st.hh;
+  }
+  function hasLocalSetup(){ try{ return Feature.isSetUp(); }catch(e){ return false; } }
+
+  /* ---------- household ---------- */
+  async function createHousehold(name){
+    st.hh = await rpc('create_household', { p_name: name || 'Our family' });
+    st.seq = 0; st.keys = {};
+    localKeys().forEach(function(k){ const e = ent(k); e.rev = 0; e.base = null; e.dirty = true; });
+    save(); emit();
+    await syncNow();
+  }
+  async function joinHousehold(code){
+    st.hh = await rpc('join_household', { p_code: code });
+    save();
+    await adoptHousehold();
+  }
+  // This device takes on the household's data (used after joining, or when signing in on a second device).
+  async function adoptHousehold(){
+    applying = true;
+    try{ localKeys().forEach(function(k){ fhRawRemove(k); }); }finally{ applying = false; }
+    st.seq = 0; st.keys = {}; save();
+    await pull('join');
+  }
+  async function leaveHousehold(){
+    await rpc('leave_household');
+    st.hh = null; st.seq = 0; st.keys = {}; save(); stopTimers(); emit();
+  }
+  async function newCode(){ const c = await rpc('rotate_invite'); if(st.hh) st.hh.invite_code = c; save(); emit(); return c; }
+  function disconnect(){
+    st = blank(); try{ localStorage.removeItem(ST_KEY); }catch(e){} stopTimers(); emit();
+  }
+
+  /* ---------- push ---------- */
+  function onLocalWrite(k, v){
+    if(applying || !active() || !eligible(k)) return;
+    const e = ent(k);
+    e.dirty = (v !== e.base);
+    save(); emit();
+    if(e.dirty) schedulePush();
+  }
+  function schedulePush(){ clearTimeout(pushTimer); pushTimer = setTimeout(function(){ syncNow().catch(function(){}); }, 2000); }
+  function pending(){ return Object.keys(st.keys).filter(function(k){ return st.keys[k].dirty; }).length; }
+
+  async function push(){
+    let changedLocal = false;
+    for(let round = 0; round < 3; round++){
+      const keys = Object.keys(st.keys).filter(function(k){ return st.keys[k].dirty && localVal(k) !== null; });
+      Object.keys(st.keys).forEach(function(k){ if(st.keys[k].dirty && localVal(k) === null) st.keys[k].dirty = false; });
+      if(!keys.length) break;
+      const sent = {};
+      const items = keys.map(function(k){ sent[k] = localVal(k); return { key:k, value:sent[k], base_rev: st.keys[k].rev }; });
+      const res = await rpc('push_kv_batch', { p_items: items });
+      let conflicts = 0;
+      (res || []).forEach(function(r){
+        const e = st.keys[r.key]; if(!e) return;
+        if(r.ok){ e.rev = r.rev; e.base = sent[r.key]; e.dirty = (localVal(r.key) !== sent[r.key]); }
+        else {
+          conflicts++;
+          const mine = localVal(r.key), merged = merge3(e.base, mine, r.value);
+          if(merged !== mine){ writeLocal(r.key, merged); changedLocal = true; }
+          e.rev = r.rev; e.base = r.value; e.dirty = (merged !== r.value);
+        }
+      });
+      save();
+      if(!conflicts) break;
+    }
+    return changedLocal;
+  }
+
+  /* ---------- pull ---------- */
+  function wizardOpen(){ return !!document.getElementById('obOverlay'); }
+  async function pull(reason){
+    let changed = false, more = true;
+    while(more){
+      const rows = await api('kv?household_id=eq.' + st.hh.id + '&seq=gt.' + st.seq + '&select=key,value,rev,seq&order=seq.asc&limit=500');
+      more = rows.length === 500;
+      rows.forEach(function(r){
+        if(r.seq > st.seq) st.seq = r.seq;
+        if(!eligible(r.key)) return;
+        const e = ent(r.key);
+        if(r.rev === e.rev && !e.dirty) return;                                  // our own write coming back
+        if(r.rev < e.rev) return;
+        const mine = localVal(r.key);
+        if(e.dirty && mine !== null){
+          const merged = merge3(e.base, mine, r.value);
+          if(merged !== mine){ writeLocal(r.key, merged); changed = true; }
+          e.base = r.value; e.rev = r.rev; e.dirty = (merged !== r.value);
+        } else {
+          if(mine !== r.value){ writeLocal(r.key, r.value); changed = true; }
+          e.base = r.value; e.rev = r.rev; e.dirty = false;
+        }
+      });
+      save();
+    }
+    if(changed) remoteChanged(reason);
+    return changed;
+  }
+  function remoteChanged(reason){
+    if(reason === 'resume' || reason === 'join'){ setTimeout(function(){ location.reload(); }, 50); return; }
+    // The app keeps its data in memory, so after new data arrives it reloads (otherwise an old copy could overwrite it).
+    // If the person is typing, ask instead of interrupting.
+    const a = document.activeElement, editing = !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+    if(editing){ toast('Updated from another device', 'Refresh', function(){ location.reload(); }); }
+    else { toast('Updated from another device…', 'Refresh now', function(){ location.reload(); }); setTimeout(function(){ location.reload(); }, 1800); }
+  }
+  function toast(text, action, fn){
+    let el = document.getElementById('fhSyncToast'); if(el) el.remove();
+    el = h('div', { id:'fhSyncToast', style:'position:fixed;left:12px;right:12px;bottom:14px;z-index:3500;display:flex;gap:12px;align-items:center;justify-content:space-between;background:var(--ink,#2B2530);color:var(--cream,#fff);padding:12px 14px;border-radius:12px;box-shadow:0 6px 24px var(--shadow,rgba(0,0,0,.3));font-size:15px;max-width:520px;margin:0 auto' },
+      h('span', { text:text }),
+      h('button', { type:'button', text:action, style:'background:var(--accent,#6C4F8A);color:#fff;border:0;border-radius:8px;padding:8px 14px;font:inherit;font-weight:600', onClick:fn }));
+    document.body.appendChild(el);
+    setTimeout(function(){ if(el.parentNode) el.remove(); }, 20000);
+  }
+
+  /* ---------- run ---------- */
+  async function syncNow(reason){
+    if(!active() || busy) return false;
+    busy = true; lastErr = ''; emit();
+    try{
+      const wiz = wizardOpen();
+      const mergedLocal = await push();
+      let changed = false;
+      if(!wiz) changed = await pull(reason || 'poll');
+      st.last = Date.now(); save();
+      if(mergedLocal && !changed) remoteChanged(reason || 'poll');
+      return changed;
+    }catch(e){ lastErr = e.offline ? 'Offline. Changes will sync when you are back online.' : (e.message || 'Sync problem.'); throw e; }
+    finally{ busy = false; emit(); }
+  }
+  function startTimers(){
+    stopTimers();
+    pollTimer = setInterval(function(){ if(document.visibilityState === 'visible' && navigator.onLine !== false) syncNow('poll').catch(function(){}); }, 30000);
+  }
+  function stopTimers(){ clearInterval(pollTimer); clearTimeout(pushTimer); pollTimer = pushTimer = null; }
+  function init(){
+    try{
+      const orig = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(k, v){
+        orig.apply(this, arguments);
+        try{ if(this === localStorage && typeof k === 'string' && k.indexOf(STORAGE_PREFIX) === 0) onLocalWrite(k.slice(STORAGE_PREFIX.length), String(v)); }catch(e){}
+      };
+    }catch(e){}
+    document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible' && active()) syncNow('resume').catch(function(){}); });
+    window.addEventListener('online', function(){ if(active()) syncNow('poll').catch(function(){}); });
+    if(active()){ startTimers(); syncNow('resume').catch(function(){}); }
+    onChange(function(){ if(active()) startTimers(); });
+  }
+
+  function summary(){
+    const m = mode(), p = pending();
+    return { mode:m, email: st.auth ? st.auth.email : '', household: st.hh, pending:p, last:st.last, busy:busy, error:lastErr, configured:!!config(), fromBuild:!!BUILD };
+  }
+
+  return { init, summary, onChange, setConfig, sendCode, verify, createHousehold, joinHousehold, adoptHousehold,
+           leaveHousehold, newCode, disconnect, syncNow, hasLocalSetup, refreshHousehold,
+           _merge3: merge3, _eligible: eligible };
+})();
+
+/* ---------- sync UI (a card in Settings; the same card appears on the first screen of setup) ---------- */
+function fhAgo(ts){
+  if(!ts) return 'not yet';
+  const s = Math.round((Date.now() - ts) / 1000);
+  if(s < 20) return 'just now'; if(s < 90) return 'a minute ago';
+  if(s < 3600) return Math.round(s / 60) + ' minutes ago';
+  if(s < 86400) return Math.round(s / 3600) + ' hours ago';
+  return Math.round(s / 86400) + ' days ago';
+}
+function fhSyncCard(opts){
+  opts = opts || {};
+  const box = h('div', { class: opts.bare ? '' : 'st-card', id:'stSync' });
+  const view = { step:'email', email:'', msg:'', working:false, join:false };
+  const note = function(t, bad){ return h('p', { class:'ob-hint', text:t, style: bad ? 'color:var(--brick-strong,#b3402a)' : '' }); };
+  const run = function(fn){
+    view.working = true; view.msg = ''; render();
+    Promise.resolve().then(fn).catch(function(e){ view.msg = (e && e.message) || 'Something went wrong.'; }).then(function(){ view.working = false; render(); });
+  };
+  const btn = function(label, fn, cls, id){ return h('button', { type:'button', class:'ob-btn ' + (cls || ''), id:id, text:label, disabled:view.working, onClick:fn }); };
+  function render(){
+    const s = FHSync.summary();
+    box.textContent = '';
+    box.appendChild(h('h3', { text:'Sync across devices' }));
+    if(!s.configured){
+      box.appendChild(note('Sync is not connected to a server in this build yet.'));
+      const ta = h('input', { type:'text', id:'stSyncCfg', placeholder:'Connection (address|key)', autocomplete:'off', style:'width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--panel-line,#ddd);border-radius:10px;font:inherit' });
+      box.appendChild(h('details', null, h('summary', { text:'Connect a server (testing)' }), ta,
+        h('div', { class:'ob-row' }, btn('Save connection', function(){ if(FHSync.setConfig(ta.value)) { view.msg = ''; } else { view.msg = 'That does not look like address|key.'; render(); } }, 'ghost'))));
+      if(view.msg) box.appendChild(note(view.msg, true));
+      return;
+    }
+    if(s.mode === 'signedout'){
+      box.appendChild(note('Keep meals, chores and shopping the same on every phone and tablet. Sign in with your email: we send a code, no password to remember.'));
+      if(view.step === 'email'){
+        const em = h('input', { type:'email', id:'stSyncEmail', placeholder:'you@example.com', value:view.email, autocomplete:'email', inputmode:'email', style:'width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--panel-line,#ddd);border-radius:10px;font:inherit;margin-bottom:8px' });
+        box.appendChild(em);
+        box.appendChild(h('div', { class:'ob-row' }, btn('Email me a code', function(){ view.email = em.value; run(function(){ return FHSync.sendCode(view.email).then(function(e){ view.email = e; view.step = 'code'; }); }); }, '', 'stSyncSend')));
+      } else {
+        box.appendChild(note('We emailed a code to ' + view.email + '. It can take a minute.'));
+        const cd = h('input', { type:'text', id:'stSyncCode', placeholder:'Code from the email', inputmode:'numeric', autocomplete:'one-time-code', style:'width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--panel-line,#ddd);border-radius:10px;font:inherit;margin-bottom:8px;letter-spacing:2px' });
+        box.appendChild(cd);
+        box.appendChild(h('div', { class:'ob-row' },
+          btn('Sign in', function(){ run(function(){ return FHSync.verify(view.email, cd.value).then(afterSignIn); }); }, '', 'stSyncVerify'),
+          btn('Back', function(){ view.step = 'email'; view.msg = ''; render(); }, 'ghost')));
+      }
+    } else if(s.mode === 'nohh'){
+      box.appendChild(note('Signed in as ' + s.email + '. Is this the first device for your family, or are you joining someone who already uses Family Hub?'));
+      if(!view.join){
+        const row = h('div', { class:'ob-row' });
+        if(FHSync.hasLocalSetup()) row.appendChild(btn('Start sync from this device', function(){ run(function(){ return FHSync.createHousehold(); }); }, '', 'stSyncCreate'));
+        row.appendChild(btn('Join with a code', function(){ view.join = true; render(); }, 'ghost', 'stSyncJoinBtn'));
+        row.appendChild(btn('Sign out', function(){ FHSync.disconnect(); }, 'ghost'));
+        box.appendChild(row);
+        if(!FHSync.hasLocalSetup()) box.appendChild(note('This device has not been set up yet, so it will take the household data when you join.'));
+      } else {
+        const cd = h('input', { type:'text', id:'stSyncJoinCode', placeholder:'ABCD-1234-EF56', autocapitalize:'characters', autocomplete:'off', style:'width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--panel-line,#ddd);border-radius:10px;font:inherit;margin-bottom:8px' });
+        box.appendChild(cd);
+        box.appendChild(note('Find the code on a device already using Family Hub: Settings, Sync across devices.'));
+        box.appendChild(h('div', { class:'ob-row' },
+          btn('Join household', function(){
+            if(FHSync.hasLocalSetup() && !confirm('This device already has its own data. Joining replaces it with the household\'s data. Continue?')) return;
+            run(function(){ return FHSync.joinHousehold(cd.value); });
+          }, '', 'stSyncJoin'),
+          btn('Back', function(){ view.join = false; view.msg = ''; render(); }, 'ghost')));
+      }
+    } else {
+      const hh = s.household || {};
+      const state = s.error ? s.error : (s.busy ? 'Syncing…' : (s.pending ? s.pending + ' change' + (s.pending === 1 ? '' : 's') + ' waiting to send' : 'Up to date. Last synced ' + fhAgo(s.last) + '.'));
+      box.appendChild(h('p', { class:'ob-hint', id:'stSyncState', text:'Signed in as ' + s.email + (hh.members ? ' · ' + hh.members + ' parent account' + (hh.members === 1 ? '' : 's') : '') }));
+      box.appendChild(h('p', { class:'ob-hint', text:state, style: s.error ? 'color:var(--brick-strong,#b3402a)' : '' }));
+      box.appendChild(h('p', { class:'ob-label', text:'Invite another parent' }));
+      box.appendChild(h('p', { class:'ob-hint', text:'Give them this code to join on their own account. It works once, then a new one appears.' }));
+      box.appendChild(h('p', { id:'stSyncInvite', text:hh.invite_code || '', style:'font-size:22px;letter-spacing:2px;font-weight:700;margin:4px 0 8px' }));
+      box.appendChild(h('div', { class:'ob-row' },
+        btn('Sync now', function(){ run(function(){ return FHSync.syncNow('manual'); }); }, '', 'stSyncNow'),
+        btn('Copy code', function(){ try{ navigator.clipboard.writeText(hh.invite_code || ''); view.msg = 'Code copied.'; }catch(e){ view.msg = 'Select the code and copy it.'; } render(); }, 'ghost'),
+        btn('New code', function(){ run(function(){ return FHSync.newCode(); }); }, 'ghost')));
+      box.appendChild(h('details', { style:'margin-top:10px' }, h('summary', { text:'More' }),
+        h('p', { class:'ob-hint', text:'Per-device settings stay on each device: the parent PIN, theme and kitchen display options.' }),
+        h('div', { class:'ob-row' },
+          btn('Sign out of sync', function(){ if(confirm('Sign out? This device keeps its data but stops syncing.')) FHSync.disconnect(); }, 'ghost'),
+          btn('Leave household', function(){ if(confirm('Leave the household? This device keeps its data but stops syncing. If you are the last parent, the shared copy is deleted.')) run(function(){ return FHSync.leaveHousehold(); }); }, 'ghost'))));
+    }
+    if(view.msg) box.appendChild(note(view.msg, !/copied/i.test(view.msg)));
+  }
+  function afterSignIn(mode){
+    // Signed in on a device that belongs to an existing household: offer to take its data.
+    const s = FHSync.summary();
+    if(s.mode === 'ok'){
+      if(FHSync.hasLocalSetup() && !confirm('Your family already has synced data. This device will switch to it, replacing what is on this device. Continue?')){ FHSync.disconnect(); return null; }
+      return FHSync.adoptHousehold();
+    }
+  }
+  FHSync.onChange(function(){ if(document.body.contains(box)) render(); });
+  render();
+  return box;
+}
+// First-screen entry point on a new device: sign in and take over the family's data instead of running setup.
+function fhSyncSignInModal(){
+  if(document.getElementById('fhSyncModal')) return;
+  const close = function(){ const m = document.getElementById('fhSyncModal'); if(m) m.remove(); };
+  const m = h('div', { id:'fhSyncModal', style:'position:fixed;inset:0;z-index:3600;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center' },
+    h('div', { style:'background:var(--cream,#fff);color:var(--ink,#222);width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:18px 16px 24px;max-height:90vh;overflow:auto' },
+      fhSyncCard({ bare:true }),
+      h('div', { class:'ob-row', style:'margin-top:10px' }, h('button', { type:'button', class:'ob-btn ghost', id:'fhSyncClose', text:'Close', onClick:close }))));
+  document.body.appendChild(m);
+}
+FHSync.init();
 
 /* ==================== Startup (setup-aware) ==================== */
 MealApp.setOnChange(refreshCurrentPage);
