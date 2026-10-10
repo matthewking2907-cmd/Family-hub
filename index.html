@@ -2082,6 +2082,27 @@ body.kid-locked .cassignee{pointer-events:none;}
 .fhx-chip{ display:inline-flex; align-items:center; gap:4px; background:var(--white,#fff); border:1px solid var(--panel-line,#ddd); border-radius:999px; padding:3px 4px 3px 10px; font-size:0.85rem; font-weight:600; }
 .fhx-chip button{ border:0; background:transparent; color:var(--muted,#888); width:24px; height:24px; border-radius:50%; cursor:pointer; }
 
+/* ===== v23: household essentials ===== */
+.fhes-h{ margin:0 0 4px; font-size:1.3rem; }
+.fhes-sub{ margin:0 0 12px; color:var(--muted,#777); font-size:0.92rem; }
+.fhes-count{ display:inline-block; background:var(--accent,#6C4F8A); color:#fff; font-weight:700; font-size:0.85rem; border-radius:999px; padding:4px 12px; margin:0 0 6px; }
+.fhes-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(128px,1fr)); gap:10px; margin:6px 0 14px; }
+.fhes-tile{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; text-align:center; font:inherit; color:inherit; min-height:112px; padding:12px 8px; border-radius:14px; border:2px solid var(--panel-line,#ddd); background:var(--white,#fff); cursor:pointer; }
+.fhes-tile:active{ transform:scale(0.98); }
+.fhes-ico{ font-size:1.9rem; line-height:1; }
+.fhes-name{ font-weight:700; font-size:0.92rem; line-height:1.2; overflow-wrap:anywhere; }
+.fhes-state{ font-size:0.72rem; color:var(--muted,#888); font-weight:600; }
+.fhes-tile.low{ background:var(--accent,#6C4F8A); border-color:var(--accent,#6C4F8A); color:#fff; }
+.fhes-tile.low .fhes-state{ color:#fff; opacity:.95; }
+.fhes-foot{ margin:8px 0 24px; }
+.fhes-addrow{ display:flex; gap:8px; margin:0 16px 8px; }
+.fhes-addrow .fhe-in{ flex:1; min-width:0; }
+.fhes-donebar{ padding:10px 16px 16px; border-top:1px solid var(--panel-line,#ddd); }
+.fhes-donebar .btn{ width:100%; }
+body.kid-locked .nav-item[data-page="essentials"]{ display:none !important; }
+.fh-setupbanner{margin:0 0 14px;border:2px solid var(--accent,#4a8);}
+.fh-setupbanner h3{margin:0 0 6px}
+
 </style>
 <script>/* ==================== THEME: colour palettes + light / dark / auto ==================== */
 /* Runs in <head> so the right colours are in place before the first paint. */
@@ -2149,6 +2170,7 @@ var FHTheme = (function(){
     <button class="nav-item" data-page="tomorrow"><span class="nav-icon">⏭️</span><span class="nav-label">Tomorrow</span></button>
     <button class="nav-item" data-page="mealplan"><span class="nav-icon">🍽️</span><span class="nav-label">Meal Plan</span></button>
     <button class="nav-item" data-page="shopping"><span class="nav-icon">🛒</span><span class="nav-label">Shopping List</span></button>
+    <button class="nav-item" data-page="essentials"><span class="nav-icon">🧻</span><span class="nav-label">Essentials</span></button>
     <button class="nav-item" data-page="chores"><span class="nav-icon">🧹</span><span class="nav-label">Chores</span></button>
     <button class="nav-item" data-page="tasklists"><span class="nav-icon">📋</span><span class="nav-label">Task Lists</span></button>
     <button class="nav-item" data-page="calendar"><span class="nav-icon">🗓️</span><span class="nav-label">Calendar</span></button>
@@ -2466,6 +2488,10 @@ var FHTheme = (function(){
       <div class="app"><div id="settingsContent"></div></div>
     </section>
 
+    <section class="page" id="page-essentials">
+      <div class="app"><div id="essentialsContent"></div></div>
+    </section>
+
     <section class="page" id="page-calendar">
       <div class="app">
         <div class="calendar-toolbar">
@@ -2533,6 +2559,7 @@ const Feature = (function(){
     if(!cfg) return true;
     const f = cfg.features || {};
     if(name === 'shopping') return f.meals !== false && f.shopping !== false;
+    if(name === 'essentials') return f.meals !== false && f.shopping !== false && f.essentials !== false;
     return f[name] !== false;
   }
   function set(name, value){
@@ -2541,12 +2568,21 @@ const Feature = (function(){
     cfg.features[name] = !!value;
     save();
   }
+  // provisioned = this feature's starter data was created by setup. A feature switched on later (provisioned false) offers a guided add-on setup.
+  function needsSetup(name){
+    if(!cfg || !cfg.setupDone || !cfg.provisioned) return false;
+    return cfg.provisioned[name] === false && on(name);
+  }
+  function markProvisioned(name){
+    if(!cfg) return; if(!cfg.provisioned) cfg.provisioned = {};
+    cfg.provisioned[name] = true; save();
+  }
   function markSetUp(features){
-    cfg = { setupDone:true, version:1, features: features, completedAt: new Date().toISOString() };
+    cfg = { setupDone:true, version:1, features: features, provisioned:{ chores:!!features.chores, meals:!!features.meals }, completedAt: new Date().toISOString() };
     save();
   }
   function get(){ return cfg; }
-  return { load, save, isSetUp, on, set, markSetUp, get };
+  return { load, save, isSetUp, on, set, markSetUp, get, needsSetup, markProvisioned };
 })();
 
 // Existing users of the older build have data but no config: treat them as already set up
@@ -3392,6 +3428,7 @@ const SHOP_SECTIONS = [
   {id:'bakery', label:'Bakery', emoji:'🍞'},
   {id:'store-cupboard', label:'Store Cupboard', emoji:'🥫'},
   {id:'frozen', label:'Frozen', emoji:'🧊'},
+  {id:'household', label:'Household & Toiletries', emoji:'🧴'},
   {id:'other', label:'Other', emoji:'🛒'}
 ];
 function shopSectionMeta(id){ return SHOP_SECTIONS.find(s=>s.id===id) || SHOP_SECTIONS[SHOP_SECTIONS.length-1]; }
@@ -7663,17 +7700,37 @@ const FHExtras = (function(){
     });
     return changed;
   }
+  // 'carry' items (used by Household essentials) stay on every shop from their first one until ticked off
+  function carryVisible(x, cyc){
+    if(cyc < x.cycle) return false;
+    return !Object.keys(x.doneIn || {}).some(function(k){ return k < cyc; });
+  }
   function mine(cyc){
     const list = load(); if(norm(list, cyc)) save(list);
-    return list.filter(function(x){ return x.scope === 'weekly' || x.cycle === cyc; });
+    return list.filter(function(x){ return x.scope === 'weekly' || (x.scope === 'carry' ? carryVisible(x, cyc) : x.cycle === cyc); });
   }
+  function pruneCarry(){
+    const old = new Date(upcomingAnchor().getTime() - 28 * 86400000), cut = ck(old);
+    const list = load(), keep = list.filter(function(x){ if(x.scope !== 'carry') return true; const ks = Object.keys(x.doneIn || {}); return !ks.length || ks.some(function(k){ return k >= cut; }); });
+    if(keep.length !== list.length) save(keep);
+  }
+  function essLow(id){ return load().some(function(x){ return x.scope === 'carry' && x.ess === id && !Object.keys(x.doneIn || {}).length; }); }
+  function essLowCount(){ return load().filter(function(x){ return x.scope === 'carry' && x.ess && !Object.keys(x.doneIn || {}).length; }).length; }
+  function setEssLow(id, name, section, on){
+    pruneCarry();
+    const list = load(), i = list.findIndex(function(x){ return x.scope === 'carry' && x.ess === id && !Object.keys(x.doneIn || {}).length; });
+    if(on && i < 0){ list.push({ id:uid(), name:name, section:section || 'household', scope:'carry', cycle:ck(upcomingAnchor()), doneIn:{}, ess:id, at:Date.now() }); }
+    if(!on && i >= 0) list.splice(i, 1);
+    save(list);
+  }
+  function nextShopLabel(){ return dlabel(upcomingAnchor()); }
   function isDone(x, cyc){ return !!(x.doneIn && x.doneIn[cyc]); }
   function count(cyc){ return mine(cyc).length; }
   function add(text, section, scope, cyc){
     const t = String(text || '').trim().replace(/\s+/g, ' ');
     if(!t) return false;
     const list = load(); norm(list, cyc);
-    if(list.some(function(x){ return x.name.toLowerCase() === t.toLowerCase() && (x.scope === 'weekly' || x.cycle === cyc); })) return false;
+    if(mine(cyc).some(function(x){ return x.name.toLowerCase() === t.toLowerCase(); }) || mine(ck(upcomingAnchor())).some(function(x){ return x.scope === 'carry' && x.name.toLowerCase() === t.toLowerCase(); })) return false;
     list.push({ id:uid(), name:t.slice(0, 80), section:section || fhGuessSection(t), scope:scope === 'weekly' ? 'weekly' : 'once', cycle:cyc, doneIn:{}, at:Date.now() });
     save(list); return true;
   }
@@ -7712,7 +7769,7 @@ const FHExtras = (function(){
       h('div', { class:'fhx-opts' }, sec, scope));
     wrap.appendChild(note);
     if(!viewingUp){
-      const later = mine(upKey).filter(function(x){ return x.scope === 'once'; });
+      const later = mine(upKey).filter(function(x){ return x.scope !== 'weekly'; });
       if(later.length){
         const box = h('div', { class:'fhx-later' }, h('div', { class:'fhm-sub', text:'Saved for your next shop (' + dlabel(up) + ')' }));
         later.forEach(function(it){
@@ -7742,13 +7799,13 @@ const FHExtras = (function(){
         h('span', { class:'shopping-check', text:done ? '✓' : '', onClick:toggle }),
         h('div', { class:'shopping-item-info', onClick:toggle },
           h('span', { class:'shopping-item-name', text:it.name }),
-          h('span', { class:'meta shopping-item-uses', text:'Added by you' + (it.scope === 'weekly' ? ' · every week' : '') })),
+          h('span', { class:'meta shopping-item-uses', text:(it.ess ? 'Household essentials · running low' : 'Added by you') + (it.scope === 'weekly' ? ' · every week' : '') })),
         h('button', { type:'button', class:'fhx-x', 'aria-label':'Remove ' + it.name, text:'✕', onClick:function(){
           if(it.scope === 'weekly' && !confirm('Remove “' + it.name + '” from every week?')) return;
           save(load().filter(function(y){ return y.id !== it.id; })); rerender(); } }));
     });
   }
-  return { ck:ck, load:load, add:add, block:block, rows:rows, count:count, KEY:KEY };
+  return { essLow:essLow, essLowCount:essLowCount, setEssLow:setEssLow, nextShopLabel:nextShopLabel, ck:ck, load:load, add:add, block:block, rows:rows, count:count, KEY:KEY };
 })();
 
 /* Imported calendars (Google / Outlook / iCloud "secret iCal link"). Read-only.
@@ -8219,6 +8276,119 @@ const FHEvents = (function(){
   return { KEY:KEY, load:load, save:save, forDay:forDay, dayBlock:dayBlock, monthMarks:monthMarks, kitchenCard:kitchenCard, openEditor:openEditor, colorOf:colorOf, iso:iso, occursOn:occursOn };
 })();
 
+/* Household essentials: tap "running low" and it goes on the next shop, and stays there until ticked off.
+   Chosen items live in brick-bites-essentials-v1 (synced). "Low" is a shopping extra flagged with the essential's id. */
+const FHEss = (function(){
+  const KEY = 'brick-bites-essentials-v1';
+  const GROUPS = [
+    { id:'paper', label:'Paper goods' }, { id:'waste', label:'Bin bags & waste' }, { id:'dish', label:'Dishwashing' },
+    { id:'laundry', label:'Laundry' }, { id:'bath', label:'Bathroom & personal' }, { id:'tools', label:'Cleaning tools' },
+    { id:'clean', label:'Cleaning products' }, { id:'maint', label:'Maintenance' }, { id:'hard', label:'Batteries, bulbs & hardware' },
+    { id:'kitchen', label:'Kitchen extras' }, { id:'firstaid', label:'First aid' }, { id:'pets', label:'Pets' }, { id:'other', label:'Your own' } ];
+  // [id, group, emoji, UK name, US name (if different), on by default]
+  const C = [
+    ['toilet-roll','paper','🧻','Toilet roll','Toilet paper',1], ['kitchen-roll','paper','🧻','Kitchen roll','Paper towels',1], ['tissues','paper','🤧','Tissues','',1],
+    ['bin-bags','waste','🗑️','Bin bags','Trash bags',1], ['garden-sacks','waste','🌿','Garden sacks','Yard waste bags',0], ['caddy-liners','waste','♻️','Food waste caddy liners','Compost bin liners',1],
+    ['washing-up-liquid','dish','🫧','Washing-up liquid','Dish soap',1], ['dishwasher-tablets','dish','🍽️','Dishwasher tablets','Dishwasher pods',1], ['dishwasher-salt','dish','🧂','Dishwasher salt','',1], ['rinse-aid','dish','✨','Rinse aid','',1],
+    ['laundry-detergent','laundry','🧺','Washing detergent','Laundry detergent',1], ['fabric-softener','laundry','🌸','Fabric softener','',1],
+    ['hand-soap','bath','🧼','Hand soap','',1], ['shampoo','bath','🧴','Shampoo','',0], ['conditioner','bath','🧴','Conditioner','',0], ['shower-gel','bath','🚿','Shower gel','Body wash',0],
+    ['toothpaste','bath','🪥','Toothpaste','',1], ['toothbrushes','bath','🪥','Toothbrushes','',0], ['deodorant','bath','💨','Deodorant','',1],
+    ['sponges','tools','🧽','Kitchen sponges','',1], ['scouring-pads','tools','🧽','Scouring pads','',0], ['microfibre-cloths','tools','🧹','Microfibre cloths','',0], ['mop-heads','tools','🧹','Mop heads','',0],
+    ['multi-surface','clean','🧴','Multi-surface spray','',1], ['toilet-cleaner','clean','🚽','Toilet bowl cleaner','',1], ['limescale','clean','🧪','Limescale remover','',0], ['glass-cleaner','clean','🪟','Glass cleaner','',0], ['bleach','clean','🧪','Bleach','',0],
+    ['drain-unblocker','maint','🔧','Drain unblocker','',0], ['soda-crystals','maint','🧂','Soda crystals','Washing soda',0], ['white-vinegar','maint','🍶','White vinegar','',0],
+    ['aa-batteries','hard','🔋','AA batteries','',0], ['aaa-batteries','hard','🔋','AAA batteries','',0], ['light-bulbs','hard','💡','Light bulbs','',1], ['vacuum-bags','hard','🌀','Vacuum cleaner bags or filters','',0],
+    ['foil','kitchen','✨','Foil','Aluminum foil',0], ['cling-film','kitchen','🎞️','Cling film','Plastic wrap',0], ['baking-paper','kitchen','📜','Baking paper','Parchment paper',0],
+    ['plasters','firstaid','🩹','Plasters','Band-aids',0],
+    ['dog-food','pets','🐕','Dog food','',1], ['cat-food','pets','🐈','Cat food','',1], ['cat-litter','pets','🐈','Cat litter','',1], ['pet-food','pets','🐾','Pet food','',1] ];
+  function us(){ try{ return FHLocale.get().naming === 'us'; }catch(e){ return false; } }
+  function mk(r){ return { id:r[0], group:r[1], emoji:r[2], name:(us() && r[4]) ? r[4] : r[3], on:!!r[5] }; }
+  function petsOf(p){ const out = {}; if(p){ if(p.dog) out['dog-food'] = 1; if(p.cat){ out['cat-food'] = 1; out['cat-litter'] = 1; } if(p.other) out['pet-food'] = 1; } return out; }
+  function catalog(pets){ const pp = petsOf(pets); return C.filter(function(r){ return r[1] !== 'pets' || pp[r[0]]; }).map(mk); }
+  function groups(pets){ return GROUPS.filter(function(g){ return g.id !== 'other' && (g.id !== 'pets' || Object.keys(petsOf(pets)).length); }); }
+  function defaults(pets){ return catalog(pets).filter(function(i){ return i.on; }).map(function(i){ return i.id; }); }
+  function load(){ try{ const v = JSON.parse(fhRawGet(KEY) || 'null'); return v && Array.isArray(v.ids) ? v : null; }catch(e){ return null; } }
+  function save(v){ fhSaveJSON(KEY, { v:1, ids:v.ids || [], custom:v.custom || [] }); }
+  // everything the household has chosen, resolved to {id,name,emoji,group}
+  function mine(){
+    const st = load(); if(!st) return [];
+    const by = {}; C.forEach(function(r){ by[r[0]] = mk(r); });
+    const out = []; st.ids.forEach(function(id){ if(by[id]) out.push(by[id]); });
+    (st.custom || []).forEach(function(c){ out.push({ id:c.id, name:c.name, emoji:'🛒', group:c.group || 'other', custom:true }); });
+    return out;
+  }
+  function uid(){ return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
+
+  function render(container){
+    container.innerHTML = '';
+    const items = mine(), st = load();
+    container.appendChild(h('h2', { class:'fhes-h', text:'Running low?' }));
+    container.appendChild(h('p', { class:'fhes-sub', text:'Tap what you need. It goes on your next shop (' + FHExtras.nextShopLabel() + ') and stays there until you tick it off.' }));
+    if(!st || !items.length){
+      container.appendChild(h('div', { class:'empty-note', text:'Choose the things you keep stocked, like toilet roll and bin bags.' }));
+      container.appendChild(h('button', { type:'button', class:'btn', text:'Choose my essentials', onClick:function(){ openEditor(function(){ render(container); }); } }));
+      return;
+    }
+    const low = FHExtras.essLowCount();
+    if(low) container.appendChild(h('div', { class:'fhes-count', text:low + (low === 1 ? ' item' : ' items') + ' on your next shop' }));
+    GROUPS.forEach(function(g){
+      const list = items.filter(function(i){ return i.group === g.id; }); if(!list.length) return;
+      container.appendChild(h('h3', { class:'freq-section-heading', text:g.label }));
+      const grid = h('div', { class:'fhes-grid' });
+      list.forEach(function(it){
+        const isLow = FHExtras.essLow(it.id);
+        grid.appendChild(h('button', { type:'button', class:'fhes-tile' + (isLow ? ' low' : ''), 'aria-pressed':isLow ? 'true' : 'false', onClick:function(){
+          FHExtras.setEssLow(it.id, it.name, 'household', !isLow); render(container); } },
+          h('span', { class:'fhes-ico', text:it.emoji }), h('span', { class:'fhes-name', text:it.name }),
+          h('span', { class:'fhes-state', text:isLow ? '✓ On next shop' : 'Tap if low' })));
+      });
+      container.appendChild(grid);
+    });
+    container.appendChild(h('div', { class:'fhes-foot' }, h('button', { type:'button', class:'btn secondary', text:'Edit my essentials', onClick:function(){ openEditor(function(){ render(container); }); } })));
+  }
+
+  function openEditor(done){
+    if(document.getElementById('fhEssSheet')) return;
+    let cur = load() || { ids:[], custom:[] };
+    const close = function(){ const m = document.getElementById('fhEssSheet'); if(m) m.remove(); document.removeEventListener('keydown', onKey); if(done) done(); };
+    const onKey = function(e){ if(e.key === 'Escape') close(); };
+    const q = h('input', { type:'search', class:'fhm-search', placeholder:'Search', autocomplete:'off', 'aria-label':'Search essentials' });
+    const list = h('div', { class:'fhm-list' });
+    function pets(){ try{ return JSON.parse(fhRawGet('brick-bites-pets-hint') || 'null'); }catch(e){ return null; } }
+    function draw(){
+      const needle = q.value.trim().toLowerCase(); list.innerHTML = '';
+      const chosen = {}; cur.ids.forEach(function(id){ chosen[id] = 1; });
+      const all = C.map(mk);
+      GROUPS.forEach(function(g){
+        const rows = all.filter(function(i){ return i.group === g.id && (!needle || i.name.toLowerCase().indexOf(needle) >= 0); });
+        const cust = g.id === 'other' ? cur.custom.filter(function(c){ return !needle || c.name.toLowerCase().indexOf(needle) >= 0; }) : [];
+        if(!rows.length && !cust.length) return;
+        list.appendChild(h('div', { class:'fhm-cat', text:g.label }));
+        rows.forEach(function(i){
+          list.appendChild(h('button', { type:'button', class:'fhm-row' + (chosen[i.id] ? ' sel' : ''), onClick:function(){
+            cur.ids = chosen[i.id] ? cur.ids.filter(function(x){ return x !== i.id; }) : cur.ids.concat([i.id]); save(cur); draw(); } },
+            h('span', { class:'fhm-name', text:i.emoji + ' ' + i.name }), h('span', { class:'fhm-tick', text:chosen[i.id] ? '✓' : '' })));
+        });
+        cust.forEach(function(c){
+          list.appendChild(h('button', { type:'button', class:'fhm-row sel', onClick:function(){ cur.custom = cur.custom.filter(function(x){ return x.id !== c.id; }); save(cur); draw(); } },
+            h('span', { class:'fhm-name', text:'🛒 ' + c.name }), h('span', { class:'fhm-meta', text:'Remove' })));
+        });
+      });
+    }
+    const own = h('input', { type:'text', class:'fhe-in', maxlength:'40', placeholder:'Add your own, e.g. Baby wipes', autocomplete:'off' });
+    const addOwn = function(){ const v = own.value.trim(); if(!v) return; cur.custom.push({ id:uid(), name:v.slice(0, 40), group:'other' }); save(cur); own.value = ''; q.value = ''; draw(); };
+    own.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); addOwn(); } });
+    q.addEventListener('input', draw);
+    const m = h('div', { id:'fhEssSheet', class:'fhm-back', onClick:function(e){ if(e.target === m) close(); } },
+      h('div', { class:'fhm-sheet', role:'dialog', 'aria-label':'My essentials' },
+        h('div', { class:'fhm-head' }, h('div', {}, h('div', { class:'fhm-title', text:'My essentials' }), h('div', { class:'fhm-sub', text:'Tick what you want a “running low” tile for.' })),
+          h('button', { type:'button', class:'fhm-x', 'aria-label':'Done', text:'✕', onClick:close })),
+        q, h('div', { class:'fhes-addrow' }, own, h('button', { type:'button', class:'btn small', text:'Add', onClick:addOwn })), list,
+        h('div', { class:'fhes-donebar' }, h('button', { type:'button', class:'btn', text:'Done', onClick:close }))));
+    document.body.appendChild(m); document.addEventListener('keydown', onKey); draw();
+  }
+  return { KEY:KEY, catalog:catalog, groups:groups, defaults:defaults, load:load, save:save, mine:mine, render:render, openEditor:openEditor };
+})();
+
 // Builds (or removes, if already open) an inline meal-picker under a meal
 // card — lets any day view (Today, Tomorrow, Calendar drill-in, or a range
 // column) swap that day's dinner without going to the Meal Plan tab.
@@ -8487,7 +8657,7 @@ document.getElementById('calTodayBtn').addEventListener('click', ()=>{
 });
 
 /* ==================== Nav / sidebar / drawer ==================== */
-const PAGE_TITLES = { today:'Today', tomorrow:'Tomorrow', mealplan:'Meal Plan', shopping:'Shopping List', chores:'Chores', tasklists:'Task Lists', calendar:'Calendar', settings:'Settings' };
+const PAGE_TITLES = { today:'Today', tomorrow:'Tomorrow', mealplan:'Meal Plan', shopping:'Shopping List', chores:'Chores', tasklists:'Task Lists', calendar:'Calendar', essentials:'Essentials', settings:'Settings' };
 let currentPage = 'today';
 
 function refreshPage(pageId){
@@ -8497,7 +8667,9 @@ function refreshPage(pageId){
   else if(pageId==='settings') renderSettingsPage();
   else if(pageId==='tasklists') ChoreApp.renderFrequencyPage(document.getElementById('taskListsContent'));
   else if(pageId==='shopping') MealApp.renderShoppingListPage(document.getElementById('shoppingListContent'));
+  else if(pageId==='essentials') FHEss.render(document.getElementById('essentialsContent'));
   // mealplan / chores refresh themselves via their own module's render()
+  if(typeof fhSetupBanner === 'function') fhSetupBanner(pageId);
 }
 function refreshCurrentPage(){ refreshPage(currentPage); }
 
@@ -8537,6 +8709,7 @@ const FH_UNITS = ['g','kg','ml','l','each','tin','pack','jar','bunch','clove','t
 function fhSafeLink(v){ v = (v||'').trim(); return /^https?:\/\/\S+$/i.test(v) ? v : ''; }
 function fhGuessSection(name){
   const n = (name||'').toLowerCase();
+  if(/toilet (roll|paper)|kitchen roll|paper towel|tissue|bin (bag|liner)|trash bag|washing.?up|dish ?soap|dishwasher|rinse aid|detergent|fabric (softener|conditioner)|laundry|hand soap|shampoo|conditioner|shower gel|body wash|toothpaste|toothbrush|deodorant|sponge|scourer|scouring|microfibre|mop head|cleaner|bleach|limescale|descal|drain|batter(y|ies)|light bulb|vacuum|\bfoil\b|cling ?film|baking (paper|parchment)|plasters?|nappies|baby wipes|sanitary|cat litter|dog food|cat food|pet food/.test(n)) return 'household';
   if(/chicken|beef|pork|lamb|mince|steak|bacon|sausage|ham\b|salmon|cod\b|haddock|prawn|tuna|fish|turkey|chorizo|meatball/.test(n)) return 'meat-fish';
   if(/frozen|ice cream|oven chips|peas\b/.test(n)) return 'frozen';
   if(/milk|cheese|butter|yogh?urt|cream|egg|mozzarella|parmesan|cheddar|halloumi|feta|crème|creme/.test(n)) return 'dairy-chilled';
@@ -8928,21 +9101,73 @@ function obApply(S){
   fhSaveJSON('brick-bites-meat-expiry-v1', {});
   fhSaveJSON('brick-bites-global-portions-v1', (F.meals && S.portionOn && S.portionG>0) ? Object.keys(portionNames).sort().map(n=>({name:n, qty:S.portionG, unit:'g'})) : []);
 
-  Feature.markSetUp({ chores:!!F.chores, meals:!!F.meals, shopping:!!(F.meals && F.shopping), rewards:!!(F.chores && F.rewards) });
+  if(F.meals && F.shopping && F.essentials){ FHEss.save({ ids: S.essIds || FHEss.defaults(S.pets), custom: S.essCustom || [] }); }
+  Feature.markSetUp({ chores:!!F.chores, meals:!!F.meals, shopping:!!(F.meals && F.shopping), essentials:!!(F.meals && F.shopping && F.essentials), rewards:!!(F.chores && F.rewards) });
   fhRawRemove(FH_DRAFT_KEY);
   try{ sessionStorage.setItem(FH_JUST_KEY, '1'); }catch(e){}
+  location.reload();
+}
+
+// Adds ONE feature (chores or meals) to a hub that was set up without it. Never touches people, ticks or the other feature's data.
+function obApplyAddon(S, which){
+  const F = S.features;
+  if(which === 'chores'){
+    const rooms = S.rooms.map(r=>({ id:r.id, label:r.label, emoji:(OB_ROOM_TYPES[r.type]||{}).emoji||'🏠', hue:r.hue, type:r.type, owner:r.owner }));
+    const chores = S.chores.filter(c=>c.include !== false).map(c=>{ const o = Object.assign({}, c); delete o.include; return o; });
+    const withChores = {}; chores.forEach(c=>withChores[c.cat]=true);
+    const cats = rooms.filter(r=>withChores[r.id]).map(r=>({ id:r.id, label:r.label, emoji:r.emoji, hue:r.hue }));
+    fhSaveJSON('chore-chart-categories-v1', cats);
+    fhSaveJSON('chore-chart-chores-v1', chores);
+    fhSaveJSON('family-hub-starter-chores-v1', chores);
+    fhSaveJSON('chore-chart-anchor-v1', fhMondayISO());
+    Feature.markProvisioned('chores');
+  } else {
+    try{ FHLocale.set({ units:S.units, naming:S.naming }); }catch(e){}
+    OB_EXTRA_MEALS = S.customMeals || [];
+    const planIds = obGeneratePlan(S, S.seed);
+    const info = obCatalogInfo(), hidden = [], overrides = {}, portionNames = {};
+    const allowedIds = {}; obAllowedMeals(S.diets).forEach(p=>allowedIds[p.id]=true);
+    info.forEach(p=>{ if(!p.custom && !allowedIds[p.id]) hidden.push(p.id); });
+    if(S.portionOn && S.portionG > 0){
+      MealApp.getCatalog().forEach(m=>{
+        let touched = false;
+        const lines = (m.ingredients||[]).map(l=>{
+          if(l.section==='meat-fish' && l.unit==='g' && /chicken|beef|mince|pork|lamb|salmon|fish|steak|turkey/i.test(l.name)){ touched = true; portionNames[l.name]=true; return Object.assign({}, l, { qty:S.portionG, perPerson:true }); }
+          return l;
+        });
+        if(touched) overrides[m.id] = { ingredients: lines };
+      });
+    }
+    const planObj = {}; [1,2,3,4].forEach(w=>{ planObj[w] = planIds[w].map(id=>({ meal:id||null, sides:[] })); });
+    fhSaveJSON('brick-bites-plan-v1', planObj);
+    const starter = {}; [1,2,3,4].forEach(w=>{ starter[w] = planObj[w].map(d=>d.meal); });
+    fhSaveJSON('family-hub-starter-plan-v1', starter);
+    fhSaveJSON('family-hub-hidden-meals-v1', hidden);
+    fhSaveJSON('family-hub-meal-rules-v1', (S.pins||[]).filter(r=> r.mealId && !hidden.includes(r.mealId)).map(r=>({ id:r.id, mealId:r.mealId, day:r.day, every:r.every, start:r.start||1 })));
+    fhSaveJSON('brick-bites-custom-meals-v1', (S.customMeals||[]).map(m=>Object.assign({ isCustom:true, cuisine:'' }, m, { cat: obGuessCat(obMealInfo(m).proteins) })));
+    fhSaveJSON('brick-bites-meal-overrides-v1', overrides);
+    fhSaveJSON('brick-bites-week-anchor-v1', { mondayISO: fhMondayISO(), week: 1 });
+    fhRawSet('brick-bites-household-size-v1', String(Math.max(1, S.householdSize || S.people.length)));
+    fhRawSet('brick-bites-shop-day-v1', String(S.shopDay));
+    fhRawSet('brick-bites-expiry-enabled-v1', String(!!S.expiryOn));
+    fhSaveJSON('brick-bites-global-portions-v1', (S.portionOn && S.portionG>0) ? Object.keys(portionNames).sort().map(n=>({name:n, qty:S.portionG, unit:'g'})) : []);
+    if(F.shopping && F.essentials){ FHEss.save({ ids: S.essIds || FHEss.defaults(S.pets), custom: S.essCustom || [] }); }
+    Feature.markProvisioned('meals');
+  }
+  fhRawRemove(FH_DRAFT_KEY);
   location.reload();
 }
 
 /* ==================== SETUP: wizard UI ==================== */
 const OBW = (function(){
   let S = null, root = null, bodyEl = null, footEl = null, headEl = null, error = '';
-  let mode = 'setup'; // 'setup' (first run) or 'rerun'
+  let mode = 'setup'; // 'setup' (first run), 'rerun' or 'addon'
+  let addon = '';     // 'chores' | 'meals' when mode is 'addon'
 
   function freshState(){
     return {
       v:2, step:'welcome',
-      features:{ chores:true, meals:true, shopping:true, rewards:true },
+      features:{ chores:true, meals:true, shopping:true, rewards:true, essentials:true }, essIds:null, essCustom:[],
       people:[
         { id:'t1', name:'', role:'parent', age:null, hue:OB_PERSON_HUES[0] },
         { id:'t2', name:'', role:'parent', age:null, hue:OB_PERSON_HUES[1] },
@@ -8963,10 +9188,16 @@ const OBW = (function(){
   function loadDraft(){ try{ const v = fhRawGet(FH_DRAFT_KEY); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
 
   function steps(){
-    const F = S.features, st = ['welcome','region','features','people'];
+    const F = S.features;
+    if(mode === 'addon'){
+      if(addon === 'chores') return ['rooms','chores'];
+      const a = ['meals','ownmeals']; if(F.shopping){ a.push('shopping'); if(F.essentials) a.push('essentials'); } return a;
+    }
+    const st = ['welcome','region','features','people'];
     if(F.chores){ st.push('rooms'); st.push('chores'); }
     if(F.meals){ st.push('meals'); st.push('ownmeals'); }
     if(F.meals && F.shopping) st.push('shopping');
+    if(F.meals && F.shopping && F.essentials) st.push('essentials');
     st.push('review');
     return st;
   }
@@ -9104,7 +9335,8 @@ const OBW = (function(){
       row('chores','🧹','Chore chart','Daily, weekly and monthly jobs shared between everyone.'),
       row('rewards','⭐','Rewards','Stars (or anything you like) earned for chores, with prizes at milestones.', !F.chores, !F.chores?'Needs the chore chart':''),
       row('meals','🍽️','Meal planner','A 4-week rolling plan with a library of family meals.'),
-      row('shopping','🛒','Shopping list','Built automatically from your meal plan, scaled to your household.', !F.meals, !F.meals?'Needs the meal planner':'')
+      row('shopping','🛒','Shopping list','Built automatically from your meal plan, scaled to your household.', !F.meals, !F.meals?'Needs the meal planner':''),
+      row('essentials','🧻','Household essentials','Tap when you run low on toilet roll, bin bags and the like. It goes on your next shop.', !(F.meals && F.shopping), !(F.meals && F.shopping)?'Needs the shopping list':'')
     ];
   }
   function stepPeople(){
@@ -9389,6 +9621,28 @@ const OBW = (function(){
     ];
   }
 
+  function stepEssentials(){
+    if(!S.essIds) S.essIds = FHEss.defaults(S.pets);
+    if(!S.essCustom) S.essCustom = [];
+    const on = {}; S.essIds.forEach(id=>{ on[id] = 1; });
+    const out = [ ...title('Household essentials','Tick what you want to keep an eye on. Later, one tap on “running low” puts it on your next shop. Change this any time.') ];
+    FHEss.groups(S.pets).forEach(g=>{
+      const items = FHEss.catalog(S.pets).filter(i=>i.group===g.id); if(!items.length) return;
+      out.push(h('p',{class:'ob-label',text:g.label}));
+      out.push(h('div',{class:'ob-chips'}, items.map(i=>chip(i.emoji+' '+i.name, !!on[i.id], ()=>{ S.essIds = on[i.id] ? S.essIds.filter(x=>x!==i.id) : S.essIds.concat([i.id]); render(); }))));
+    });
+    if(S.essCustom.length){
+      out.push(h('p',{class:'ob-label',text:'Your own'}));
+      out.push(h('div',{class:'ob-chips'}, S.essCustom.map(c=>chip('✚ '+c.name+'  ×', true, ()=>{ S.essCustom = S.essCustom.filter(x=>x.id!==c.id); render(); }))));
+    }
+    const inp = h('input',{class:'ob-input',type:'text',maxlength:40,placeholder:'Add your own, e.g. Baby wipes',autocomplete:'off'});
+    const addIt = ()=>{ const v = inp.value.trim(); if(!v) return; S.essCustom.push({ id:'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), name:v.slice(0,40), group:'other' }); render(); };
+    inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addIt(); } });
+    out.push(h('div',{class:'ob-row'}, inp, h('button',{type:'button',class:'ob-btn ghost',text:'Add',onClick:addIt})));
+    out.push(h('p',{class:'ob-hint',text:(S.essIds.length + S.essCustom.length)+' selected'}));
+    return out;
+  }
+
   /* ----- fixed nights: pin a meal to a night, optionally repeating every x weeks ----- */
   const PIN_REPEATS = [['1:1','Every week'],['2:1','Every other week — weeks 1 & 3'],['2:2','Every other week — weeks 2 & 4'],
     ['4:1','Every 4 weeks — week 1'],['4:2','Every 4 weeks — week 2'],['4:3','Every 4 weeks — week 3'],['4:4','Every 4 weeks — week 4'],
@@ -9458,6 +9712,7 @@ const OBW = (function(){
       lines.push(['🍽️', S.selectedMeals.length+' meals'+(S.customMeals.length?' (incl. '+S.customMeals.length+' of your own)':'')+' · '+S.cookNights.filter(Boolean).length+' cook nights a week · '+S.weeks+'-week rotation']);
       if((S.pins||[]).length) lines.push(['📌', (S.pins||[]).length+' fixed night'+((S.pins||[]).length===1?'':'s')+' set']);
       if(F.shopping) lines.push(['🛒', 'Shopping on '+OB_DAY_LONG[S.shopDay]+' for '+(S.householdSize||nm.length)]);
+      if(F.shopping && F.essentials) lines.push(['🧻', ((S.essIds||FHEss.defaults(S.pets)).length + (S.essCustom||[]).length)+' household essentials to keep stocked']);
     }
     const prev = [];
     if(F.meals){
@@ -9474,7 +9729,7 @@ const OBW = (function(){
       h('div',{class:'ob-list'}, lines.map(l=>h('div',{class:'ob-sum'},h('span',{text:l[0]}),h('span',{text:l[1]})))), prev,
       mode==='rerun' ? h('div',{class:'ob-warn',text:'This will replace your current data.'}) : null ];
   }
-  const RENDERERS = { welcome:stepWelcome, region:stepRegion, features:stepFeatures, people:stepPeople, rooms:stepRooms, chores:stepChores, meals:stepMeals, ownmeals:stepOwnMeals, fixed:stepFixed, shopping:stepShopping, review:stepReview };
+  const RENDERERS = { welcome:stepWelcome, region:stepRegion, features:stepFeatures, people:stepPeople, rooms:stepRooms, chores:stepChores, meals:stepMeals, ownmeals:stepOwnMeals, fixed:stepFixed, shopping:stepShopping, essentials:stepEssentials, review:stepReview };
 
   /* ----- per-page reset ----- */
   const RESET_KEYS = {
@@ -9486,6 +9741,7 @@ const OBW = (function(){
     ownmeals:['customMeals','selectedMeals'],
     fixed:['pins'],
     shopping:['shopDay','householdSize','portionOn','portionG','expiryOn'],
+    essentials:['essIds','essCustom'],
     review:['seed']
   };
   function resetPage(){
@@ -9520,7 +9776,7 @@ const OBW = (function(){
     error = validate(); if(error){ render(); return; }
     const tmp = Object.assign({}, S, { people: namedPeople(), rooms: S.features.chores ? effectiveRooms() : [] });
     if(S.features.chores){ ensureRooms(); ensureChores(); tmp.chores = S.chores; }
-    obApply(tmp);
+    if(mode === 'addon') obApplyAddon(tmp, addon); else obApply(tmp);
   }
   function render(){
     if(!root) return;
@@ -9537,17 +9793,29 @@ const OBW = (function(){
     if(RESET_KEYS[S.step]) bodyEl.appendChild(h('div',{class:'ob-resetrow'}, h('button',{type:'button',class:'ob-link',id:'obResetPage',text:'↺ Clear this page & reset to defaults',onClick:resetPage})));
     footEl.innerHTML = '';
     const last = i === st.length-1;
-    if(mode==='rerun' && i===0) footEl.appendChild(h('button',{type:'button',class:'ob-btn ghost',text:'Cancel',onClick:close}));
+    if((mode==='rerun' || mode==='addon') && i===0) footEl.appendChild(h('button',{type:'button',class:'ob-btn ghost',text:'Cancel',onClick:close}));
     else footEl.appendChild(h('button',{type:'button',class:'ob-btn ghost',text:'Back',disabled:i===0,onClick:()=>go(-1)}));
-    footEl.appendChild(h('button',{type:'button',class:'ob-btn primary',id:'obNext',text: S.step==='welcome' ? 'Let’s start' : (last ? 'Set up my hub' : 'Next'),onClick:()=> last ? finish() : go(1)}));
+    footEl.appendChild(h('button',{type:'button',class:'ob-btn primary',id:'obNext',text: S.step==='welcome' ? 'Let’s start' : (last ? (mode==='addon' ? 'Save' : 'Set up my hub') : 'Next'),onClick:()=> last ? finish() : go(1)}));
     saveDraft();
   }
   function close(){ if(root){ root.remove(); root = null; } document.body.classList.remove('ob-open'); }
   function open(m){
+    addon = '';
+    if(m && m.indexOf('addon:') === 0){ addon = m.slice(6); m = 'addon'; }
     mode = m || 'setup';
     const d = mode==='setup' ? loadDraft() : null;
     S = d && d.v === 2 && d.people ? Object.assign(freshState(), d) : freshState();
     if(mode==='rerun') S.step='welcome';
+    if(mode==='addon'){
+      // keep the people already in the hub; only this one feature gets set up
+      let ppl = []; try{ ppl = JSON.parse(fhRawGet('chore-chart-people-v1') || '[]'); }catch(e){}
+      if(ppl.length) S.people = ppl.map(p=>({ id:p.id, name:p.name || '', role:p.role === 'child' ? 'child' : 'parent', age:p.age || null, hue:p.hue }));
+      S.nextPid = 100;
+      S.features = { chores: addon === 'chores', meals: addon === 'meals', shopping: addon === 'meals' && Feature.on('shopping'), essentials: addon === 'meals' && Feature.on('essentials') && !FHEss.load(), rewards: Feature.on('rewards') };
+      S.householdSize = S.people.length || 4;
+      try{ const sd = fhRawGet('brick-bites-shop-day-v1'); if(sd != null && sd !== '') S.shopDay = parseInt(sd, 10) || 0; }catch(e){}
+      S.step = steps()[0];
+    }
     error=''; OB_EXTRA_MEALS = S.customMeals || []; ownW = null; ownMsg = '';
     if(root) root.remove();
     root = h('div',{class:'ob-overlay',id:'obOverlay'},
@@ -9560,7 +9828,7 @@ const OBW = (function(){
 
 /* ==================== SETUP: feature gating, settings page, all-set summary ==================== */
 function applyFeatureGating(){
-  const gate = { mealplan:'meals', shopping:'shopping', chores:'chores', tasklists:'chores' };
+  const gate = { mealplan:'meals', shopping:'shopping', essentials:'essentials', chores:'chores', tasklists:'chores' };
   Object.keys(gate).forEach(page=>{
     const btn = document.querySelector('.nav-item[data-page="'+page+'"]');
     if(btn) btn.style.display = Feature.on(gate[page]) ? '' : 'none';
@@ -9571,7 +9839,7 @@ function applyFeatureGating(){
   document.body.classList.toggle('rewards-off', !(Feature.on('chores') && Feature.on('rewards')));
   document.body.classList.toggle('chores-off', !Feature.on('chores'));
   document.body.classList.toggle('meals-off', !Feature.on('meals'));
-  const hidden = { mealplan:!Feature.on('meals'), shopping:!Feature.on('shopping'), chores:!Feature.on('chores'), tasklists:!Feature.on('chores') };
+  const hidden = { mealplan:!Feature.on('meals'), shopping:!Feature.on('shopping'), essentials:!Feature.on('essentials'), chores:!Feature.on('chores'), tasklists:!Feature.on('chores') };
   if(typeof currentPage !== 'undefined' && hidden[currentPage]) showPage('today');
 }
 
@@ -9617,13 +9885,14 @@ function renderSettingsPage(){
   const toggle = (key, emoji, name, desc, disabled)=> h('label',{class:'ob-feature'+(disabled?' dis':'')},
     h('span',{class:'ob-fe-ico',text:emoji}),
     h('span',{class:'ob-fe-txt'}, h('b',{text:name}), h('small',{text:desc})),
-    h('input',{type:'checkbox',checked:disabled?false:F.on(key),disabled:!!disabled,onChange:e=>{ F.set(key,e.target.checked); applyFeatureGating(); renderSettingsPage(); }}));
+    h('input',{type:'checkbox',checked:disabled?false:F.on(key),disabled:!!disabled,onChange:e=>{ F.set(key,e.target.checked); applyFeatureGating(); renderSettingsPage(); if(e.target.checked && (key==='chores' || key==='meals') && F.needsSetup(key)) OBW.open('addon:'+key); }}));
   root.appendChild(h('div',{class:'st-card'},
     h('h3',{text:'Features'}),
     toggle('chores','🧹','Chore chart','Chores, task lists and calendar chores'),
     toggle('rewards','⭐','Rewards','Stars and prizes', !F.on('chores')),
     toggle('meals','🍽️','Meal planner','Meal plan and calendar meals'),
     toggle('shopping','🛒','Shopping list','Needs the meal planner', !F.on('meals')),
+    toggle('essentials','🧻','Household essentials','Tap what is running low and it goes on your next shop. Needs the shopping list', !F.on('shopping')),
     h('p',{class:'ob-hint',text:'Turning something off only hides it — your data is kept and comes back if you turn it on again.'})));
   const th = FHTheme.get();
   const rr = ()=>{ renderSettingsPage(); };
@@ -9705,7 +9974,7 @@ function showAllSet(){
   });
 }
 
-const FH_APP_VERSION = '0.22 (test build)';
+const FH_APP_VERSION = '0.24 (test build)';
 function fhFeedbackNote(){
   const L=[]; const add=(k,v)=>L.push(k+': '+v);
   add('App', 'Family Hub '+FH_APP_VERSION);
@@ -9735,6 +10004,20 @@ function feedbackCard(){
   return h('div',{class:'st-card'}, h('h3',{text:'Send feedback'}),
     h('p',{class:'ob-hint',text:'Found a bug or have an idea? Tap the button to copy a short note with your device, app version and settings, then paste it into a message. It never includes names, meals or chores.'}),
     ta, h('div',{class:'ob-row'}, h('button',{type:'button',class:'ob-btn',id:'stFeedback',text:'📋 Copy feedback note',onClick:copy})), out);
+}
+
+// Offered on a page whose feature was switched on after setup and has no starter data yet.
+function fhSetupBanner(pageId){
+  const feat = { chores:'chores', tasklists:'chores', mealplan:'meals', shopping:'meals' }[pageId];
+  document.querySelectorAll('.fh-setupbanner').forEach(n=>n.remove());
+  if(!feat || !Feature.needsSetup(feat)) return;
+  const sec = document.getElementById('page-' + pageId); if(!sec) return;
+  const label = feat === 'chores' ? 'chore chart' : 'meal planner';
+  const box = h('div', { class:'st-card fh-setupbanner' },
+    h('h3', { text:'Set up your ' + label }),
+    h('p', { class:'ob-sub', text: feat === 'chores' ? 'Pick your rooms and we will suggest a starter set of chores for your family. Nothing else in your hub changes.' : 'Choose your meals, cooking nights and shopping details. Nothing else in your hub changes.' }),
+    h('button', { type:'button', class:'ob-btn primary', text:'Start setup', onClick:()=>OBW.open('addon:' + feat) }));
+  sec.insertBefore(box, sec.firstChild);
 }
 
 /* ==================== KITCHEN DISPLAY (tablet / wall screen) ==================== */
