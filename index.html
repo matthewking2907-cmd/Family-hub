@@ -2065,6 +2065,23 @@ body.kid-locked .cassignee{pointer-events:none;}
 .fhx-opts{ display:flex; gap:8px; margin:0 0 10px; }
 .fhx-sel{ flex:1 1 0; min-width:0; font:inherit; font-size:0.9rem; padding:9px 10px; border-radius:10px; border:1px solid var(--panel-line,#ddd); background:var(--white,#fff); color:inherit; }
 
+/* ===== v21: connected calendars ===== */
+.fhc-feed{ display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; border-left:5px solid var(--ec,#6C4F8A); background:var(--panel,#f3f0f7); border-radius:10px; padding:10px 12px; margin:8px 0; }
+.fhc-main{ flex:1 1 200px; min-width:0; }
+.fhc-name{ font-weight:700; overflow-wrap:anywhere; }
+.fhc-sub{ font-size:0.8rem; color:var(--muted,#777); margin-top:2px; }
+.fhc-btns{ display:flex; gap:6px; flex-wrap:wrap; }
+.fhc-add{ display:flex; flex-direction:column; gap:10px; margin-top:14px; padding-top:12px; border-top:1px solid var(--panel-line,#ddd); }
+.fhc-help{ margin-top:12px; font-size:0.9rem; }
+.fhc-help summary{ cursor:pointer; font-weight:700; color:var(--accent,#6C4F8A); }
+.fhc-help ol{ padding-left:20px; line-height:1.5; }
+.fhx-note{ font-size:0.85rem; font-weight:600; color:var(--good,#2e7d32); min-height:0; margin:-4px 0 8px; }
+.fhx-note:empty{ display:none; }
+.fhx-later{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:0 0 10px; padding:8px 10px; background:var(--panel,#f3f0f7); border-radius:10px; }
+.fhx-later .fhm-sub{ width:100%; margin:0 0 2px; }
+.fhx-chip{ display:inline-flex; align-items:center; gap:4px; background:var(--white,#fff); border:1px solid var(--panel-line,#ddd); border-radius:999px; padding:3px 4px 3px 10px; font-size:0.85rem; font-weight:600; }
+.fhx-chip button{ border:0; background:transparent; color:var(--muted,#888); width:24px; height:24px; border-radius:50%; cursor:pointer; }
+
 </style>
 <script>/* ==================== THEME: colour palettes + light / dark / auto ==================== */
 /* Runs in <head> so the right colours are in place before the first paint. */
@@ -7627,6 +7644,14 @@ const FHExtras = (function(){
   const KEY = 'brick-bites-shopping-extras-v1';
   function pad(n){ return (n < 10 ? '0' : '') + n; }
   function ck(d){ return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }   // shop-week key
+  function upcomingAnchor(){
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    const a = MealApp.mostRecentShopDay(new Date());
+    const x = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+    if(x.getTime() >= t.getTime()) return x;
+    return new Date(x.getFullYear(), x.getMonth(), x.getDate() + 7);
+  }
+  function dlabel(d){ return d.toLocaleDateString(undefined, { weekday:'short', day:'numeric', month:'short' }); }
   function load(){ try{ const v = JSON.parse(fhRawGet(KEY) || '[]'); return Array.isArray(v) ? v : []; }catch(e){ return []; } }
   function save(list){ fhSaveJSON(KEY, list); }
   function uid(){ return 'x' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -7663,16 +7688,39 @@ const FHExtras = (function(){
     sec.value = 'store-cupboard';
     sec.addEventListener('change', function(){ secTouched = true; });
     input.addEventListener('input', function(){ if(!secTouched && input.value.trim()) sec.value = fhGuessSection(input.value); });
-    const scope = h('select', { class:'fhx-sel', 'aria-label':'How often' },
-      h('option', { value:'once', text:'This week only' }), h('option', { value:'weekly', text:'Every week' }));
+    const up = upcomingAnchor(), upKey = ck(up), viewingUp = upKey === cyc;
+    const scope = h('select', { class:'fhx-sel', 'aria-label':'Which shop' },
+      h('option', { value:'next', text:'Next shop (' + dlabel(up) + ')' }),
+      viewingUp ? null : h('option', { value:'once', text:'This shop only (' + dlabel(anchor) + ')' }),
+      h('option', { value:'weekly', text:'Every shop' }));
+    const note = h('div', { class:'fhx-note' });
     const go = function(){
-      if(add(input.value, sec.value, scope.value, cyc)){ rerender(); const n = document.querySelector('.fhx-input'); if(n) n.focus(); }
+      const sc = scope.value, name = input.value.trim();
+      const target = sc === 'next' ? upKey : cyc;
+      if(add(input.value, sec.value, sc === 'weekly' ? 'weekly' : 'once', target)){
+        const kept = scope.value; rerender();
+        const n = document.querySelector('.fhx-input'); if(n) n.focus();
+        const sel = document.querySelectorAll('.fhx-opts select')[1]; if(sel) sel.value = kept;
+        const nn = document.querySelector('.fhx-note');
+        if(nn && sc === 'next' && !viewingUp) nn.textContent = '✓ ' + name + ' added to your next shop (' + dlabel(up) + ').';
+      }
       else { input.value = ''; }
     };
     input.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); go(); } });
     const wrap = h('div', { class:'fhx-wrap' },
       h('div', { class:'fhx-add' }, input, h('button', { type:'button', class:'btn small', text:'Add', onClick:go })),
       h('div', { class:'fhx-opts' }, sec, scope));
+    wrap.appendChild(note);
+    if(!viewingUp){
+      const later = mine(upKey).filter(function(x){ return x.scope === 'once'; });
+      if(later.length){
+        const box = h('div', { class:'fhx-later' }, h('div', { class:'fhm-sub', text:'Saved for your next shop (' + dlabel(up) + ')' }));
+        later.forEach(function(it){
+          box.appendChild(h('span', { class:'fhx-chip' }, it.name, h('button', { type:'button', 'aria-label':'Remove ' + it.name, text:'✕', onClick:function(){ save(load().filter(function(y){ return y.id !== it.id; })); rerender(); } })));
+        });
+        wrap.appendChild(box);
+      }
+    }
     const done = mine(cyc).filter(function(x){ return x.scope === 'once' && isDone(x, cyc); }).length;
     if(done) wrap.appendChild(h('button', { type:'button', class:'btn secondary small fhx-clear', text:'Clear ticked extras (' + done + ')', onClick:function(){
       save(load().filter(function(y){ return !(y.scope === 'once' && y.cycle === cyc && isDone(y, cyc)); })); rerender(); } }));
@@ -7701,6 +7749,324 @@ const FHExtras = (function(){
     });
   }
   return { ck:ck, load:load, add:add, block:block, rows:rows, count:count, KEY:KEY };
+})();
+
+/* Imported calendars (Google / Outlook / iCloud "secret iCal link"). Read-only.
+   The link is stored privately on the server; the server fetches the file for household members.
+   We parse it here, expand repeats, and cache the result on this device (never synced, never in backups). */
+const FHCal = (function(){
+  const CK = 'fhcal:cache', DAY = 86400000, WIN_BACK = 45, WIN_FWD = 500, REFRESH_MS = 15 * 60 * 1000;
+  let cache = { feeds:[], data:{} }, busy = false, lastErr = '', listeners = [];
+  try{ const v = JSON.parse(localStorage.getItem(CK) || 'null'); if(v && v.feeds && v.data) cache = v; }catch(e){}
+  function persist(){ try{ localStorage.setItem(CK, JSON.stringify(cache)); }catch(e){} }
+  function emit(){ listeners.forEach(function(f){ try{ f(); }catch(e){} }); }
+  function onChange(f){ listeners.push(f); }
+  function clear(){ cache = { feeds:[], data:{} }; try{ localStorage.removeItem(CK); }catch(e){} emit(); }
+  function dayNum(y, m, d){ return Math.round(Date.UTC(y, m, d) / DAY); }
+  function numToYMD(n){ const t = new Date(n * DAY); return [t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()]; }
+
+  /* ---------- time zones ---------- */
+  const WIN_TZ = { 'GMT Standard Time':'Europe/London', 'W. Europe Standard Time':'Europe/Berlin', 'Romance Standard Time':'Europe/Paris',
+    'Central Europe Standard Time':'Europe/Budapest', 'Central European Standard Time':'Europe/Warsaw', 'E. Europe Standard Time':'Europe/Bucharest',
+    'Eastern Standard Time':'America/New_York', 'Central Standard Time':'America/Chicago', 'Mountain Standard Time':'America/Denver',
+    'Pacific Standard Time':'America/Los_Angeles', 'AUS Eastern Standard Time':'Australia/Sydney', 'India Standard Time':'Asia/Kolkata', 'UTC':'UTC' };
+  const dtfCache = {};
+  function dtf(tz){ return dtfCache[tz] || (dtfCache[tz] = new Intl.DateTimeFormat('en-US', { timeZone:tz, hourCycle:'h23', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit' })); }
+  function offsetAt(ms, tz){
+    const p = {}; dtf(tz).formatToParts(new Date(ms)).forEach(function(x){ p[x.type] = x.value; });
+    return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second) - Math.floor(ms / 1000) * 1000;
+  }
+  // wall-clock time in a zone -> real instant (ms). Unknown zone: treat as this device's local time.
+  function wallToMs(y, mo, d, h, mi, tz){
+    if(!tz) return new Date(y, mo, d, h, mi).getTime();
+    tz = WIN_TZ[tz] || tz;
+    try{
+      const guess = Date.UTC(y, mo, d, h, mi);
+      let ms = guess - offsetAt(guess, tz);
+      ms = guess - offsetAt(ms, tz);
+      return ms;
+    }catch(e){ return new Date(y, mo, d, h, mi).getTime(); }
+  }
+
+  /* ---------- ICS parsing ---------- */
+  function unfold(text){ return String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n[ \t]/g, '').split('\n'); }
+  function unesc(s){ return String(s || '').replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1').trim(); }
+  function parseProp(line){
+    const i = line.indexOf(':'); if(i < 0) return null;
+    const head = line.slice(0, i), val = line.slice(i + 1), parts = head.split(';'), params = {};
+    parts.slice(1).forEach(function(p){ const j = p.indexOf('='); if(j > 0) params[p.slice(0, j).toUpperCase()] = p.slice(j + 1).replace(/^"|"$/g, ''); });
+    return { name:parts[0].toUpperCase(), params:params, val:val };
+  }
+  // -> { allDay, y,m,d,h,mi, tz, utc }
+  function parseDT(p){
+    const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?$/.exec((p.val || '').trim()); if(!m) return null;
+    const allDay = p.params.VALUE === 'DATE' || m[4] === undefined;
+    return { allDay:allDay, y:+m[1], m:+m[2] - 1, d:+m[3], h:+(m[4] || 0), mi:+(m[5] || 0), utc:!!m[7], tz:p.params.TZID || '' };
+  }
+  function instant(dt){ return dt.utc ? Date.UTC(dt.y, dt.m, dt.d, dt.h, dt.mi) : wallToMs(dt.y, dt.m, dt.d, dt.h, dt.mi, dt.tz); }
+  function parseDur(s){
+    const m = /^([+-])?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec((s || '').trim()); if(!m) return 0;
+    const v = ((+m[2] || 0) * 7 + (+m[3] || 0)) * DAY + (+m[4] || 0) * 3600000 + (+m[5] || 0) * 60000 + (+m[6] || 0) * 1000;
+    return m[1] === '-' ? -v : v;
+  }
+  function parseICS(text){
+    const lines = unfold(text), events = []; let cur = null, inAlarm = 0;
+    lines.forEach(function(line){
+      if(!line) return;
+      if(line === 'BEGIN:VEVENT'){ cur = { ex:[], rdates:[] }; inAlarm = 0; return; }
+      if(line === 'END:VEVENT'){ if(cur) events.push(cur); cur = null; return; }
+      if(!cur) return;
+      if(line === 'BEGIN:VALARM'){ inAlarm++; return; }
+      if(line === 'END:VALARM'){ inAlarm--; return; }
+      if(inAlarm) return;
+      const p = parseProp(line); if(!p) return;
+      switch(p.name){
+        case 'UID': cur.uid = p.val; break;
+        case 'SUMMARY': cur.title = unesc(p.val); break;
+        case 'LOCATION': cur.loc = unesc(p.val); break;
+        case 'STATUS': cur.status = p.val.toUpperCase(); break;
+        case 'DTSTART': cur.start = parseDT(p); break;
+        case 'DTEND': cur.end = parseDT(p); break;
+        case 'DURATION': cur.dur = parseDur(p.val); break;
+        case 'RRULE': cur.rrule = p.val; break;
+        case 'EXDATE': p.val.split(',').forEach(function(v){ const d = parseDT({ val:v, params:p.params }); if(d) cur.ex.push(d); }); break;
+        case 'RECURRENCE-ID': cur.recId = parseDT(p); break;
+      }
+    });
+    return events;
+  }
+
+  /* ---------- repeats ---------- */
+  const WD = { SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6 };
+  function parseRule(s){
+    const r = {}; String(s || '').split(';').forEach(function(kv){ const i = kv.indexOf('='); if(i > 0) r[kv.slice(0, i).toUpperCase()] = kv.slice(i + 1); });
+    r.interval = Math.max(1, parseInt(r.INTERVAL, 10) || 1);
+    r.count = r.COUNT ? parseInt(r.COUNT, 10) : 0;
+    r.until = null;
+    if(r.UNTIL){ const m = /^(\d{4})(\d{2})(\d{2})/.exec(r.UNTIL); if(m) r.until = dayNum(+m[1], +m[2] - 1, +m[3]); }
+    r.byday = (r.BYDAY || '').split(',').filter(Boolean).map(function(x){ const m = /^([+-]?\d+)?(SU|MO|TU|WE|TH|FR|SA)$/.exec(x); return m ? { n:m[1] ? parseInt(m[1], 10) : 0, wd:WD[m[2]] } : null; }).filter(Boolean);
+    r.bymonthday = (r.BYMONTHDAY || '').split(',').filter(Boolean).map(Number);
+    r.bymonth = (r.BYMONTH || '').split(',').filter(Boolean).map(Number);
+    r.bysetpos = r.BYSETPOS ? parseInt(r.BYSETPOS, 10) : 0;
+    r.wkst = WD[r.WKST] != null ? WD[r.WKST] : 1;
+    return r;
+  }
+  function dowOf(n){ return (new Date(n * DAY).getUTCDay()); }
+  function monthDays(y, m){ return new Date(Date.UTC(y, m + 1, 0)).getUTCDate(); }
+  // candidate start-days (as day numbers) in order, up to endDay
+  function expandDays(rule, base, endDay, cap){
+    const out = [], freq = rule.FREQ, iv = rule.interval, b = dayNum(base.y, base.m, base.d);
+    const limit = rule.until != null ? Math.min(endDay, rule.until) : endDay;
+    function push(n){ if(n >= b && n <= limit){ out.push(n); } return rule.count && out.length >= rule.count; }
+    let guard = 0;
+    if(freq === 'DAILY'){
+      for(let n = b; n <= limit && guard++ < cap; n += iv){
+        const dw = dowOf(n);
+        if(rule.byday.length && !rule.byday.some(function(x){ return x.wd === dw; })) continue;
+        if(rule.bymonth.length && rule.bymonth.indexOf(new Date(n * DAY).getUTCMonth() + 1) < 0) continue;
+        if(push(n)) break;
+      }
+    } else if(freq === 'WEEKLY'){
+      const days = rule.byday.length ? rule.byday.map(function(x){ return x.wd; }) : [dowOf(b)];
+      const ws = b - ((dowOf(b) - rule.wkst + 7) % 7);
+      for(let w = ws; w <= limit && guard++ < cap; w += 7 * iv){
+        const list = days.map(function(wd){ return w + ((wd - rule.wkst + 7) % 7); }).sort(function(a, c){ return a - c; });
+        let stop = false;
+        for(let i = 0; i < list.length; i++){ if(list[i] < b) continue; if(list[i] > limit){ stop = true; break; } if(push(list[i])){ stop = true; break; } }
+        if(stop) break;
+      }
+    } else if(freq === 'MONTHLY' || freq === 'YEARLY'){
+      let y = base.y, m = base.m;
+      const step = freq === 'MONTHLY' ? iv : 12 * iv;
+      for(let i = 0; guard++ < cap; i++){
+        const ym = y * 12 + m + i * step, yy = Math.floor(ym / 12), mm = ym % 12;
+        if(dayNum(yy, mm, 1) > limit) break;
+        let months = [mm];
+        if(freq === 'YEARLY'){ months = rule.bymonth.length ? rule.bymonth.map(function(x){ return x - 1; }) : [base.m]; }
+        let stop = false;
+        months.forEach(function(mo){
+          if(stop) return;
+          const dim = monthDays(yy, mo); let cands = [];
+          if(rule.byday.length){
+            rule.byday.forEach(function(bd){
+              const all = []; for(let d = 1; d <= dim; d++){ if(dowOf(dayNum(yy, mo, d)) === bd.wd) all.push(d); }
+              if(bd.n > 0 && all[bd.n - 1]) cands.push(all[bd.n - 1]); else if(bd.n < 0 && all[all.length + bd.n]) cands.push(all[all.length + bd.n]); else if(!bd.n) cands = cands.concat(all);
+            });
+            cands.sort(function(a, c){ return a - c; });
+            if(rule.bysetpos){ const p = rule.bysetpos > 0 ? cands[rule.bysetpos - 1] : cands[cands.length + rule.bysetpos]; cands = p ? [p] : []; }
+          } else if(rule.bymonthday.length){
+            cands = rule.bymonthday.map(function(d){ return d < 0 ? dim + d + 1 : d; }).filter(function(d){ return d >= 1 && d <= dim; }).sort(function(a, c){ return a - c; });
+          } else if(base.d <= dim){ cands = [base.d]; }
+          for(let k = 0; k < cands.length; k++){ const n = dayNum(yy, mo, cands[k]); if(n > limit){ stop = true; break; } if(push(n)){ stop = true; break; } }
+        });
+        if(stop) break;
+      }
+    } else { push(b); }
+    return out;
+  }
+  function occurrences(events, winStart, winEnd){
+    const startDay = Math.floor(winStart / DAY), endDay = Math.floor(winEnd / DAY), out = [];
+    const overrides = {};
+    events.forEach(function(e){ if(e.recId && e.uid) overrides[e.uid + '|' + dayNum(e.recId.y, e.recId.m, e.recId.d)] = e; });
+    function mk(e, sMs, eMs, sDay, eDay, allDay){
+      if(allDay){ if(eDay <= startDay || sDay > endDay) return; out.push({ a:1, sd:sDay, ed:eDay, t:e.title || '', l:e.loc || '' }); }
+      else { if(eMs < winStart || sMs > winEnd) return; out.push({ a:0, s:sMs, e:eMs, t:e.title || '', l:e.loc || '' }); }
+    }
+    function shape(e, s){   // length of one occurrence from its DTEND/DURATION
+      if(s.allDay){
+        let len = 1;
+        if(e.end && e.end.allDay) len = Math.max(1, dayNum(e.end.y, e.end.m, e.end.d) - dayNum(s.y, s.m, s.d));
+        else if(e.dur) len = Math.max(1, Math.round(e.dur / DAY));
+        return { allDay:true, days:len };
+      }
+      let ms = 0;
+      if(e.end && !e.end.allDay) ms = Math.max(0, instant(e.end) - instant(s)); else if(e.dur) ms = Math.max(0, e.dur);
+      return { allDay:false, ms:ms };
+    }
+    events.forEach(function(e){
+      if(!e.start || e.status === 'CANCELLED') return;
+      if(e.recId){ const sh0 = shape(e, e.start); const sd0 = dayNum(e.start.y, e.start.m, e.start.d);
+        if(sh0.allDay) mk(e, 0, 0, sd0, sd0 + sh0.days, true); else { const s0 = instant(e.start); mk(e, s0, s0 + sh0.ms, 0, 0, false); } return; }
+      const s = e.start, sh = shape(e, s), exSet = {};
+      e.ex.forEach(function(x){ exSet[dayNum(x.y, x.m, x.d)] = 1; });
+      const days = e.rrule ? expandDays(parseRule(e.rrule), s, endDay + 1, 6000) : [dayNum(s.y, s.m, s.d)];
+      days.forEach(function(n){
+        if(exSet[n] || (e.uid && overrides[e.uid + '|' + n])) return;
+        const ymd = numToYMD(n);
+        if(sh.allDay) mk(e, 0, 0, n, n + sh.days, true);
+        else { const sMs = s.utc && !e.rrule ? instant(s) : (s.utc ? Date.UTC(ymd[0], ymd[1], ymd[2], s.h, s.mi) : wallToMs(ymd[0], ymd[1], ymd[2], s.h, s.mi, s.tz)); mk(e, sMs, sMs + sh.ms, 0, 0, false); }
+      });
+    });
+    out.sort(function(a, c){ return (a.a ? a.sd * DAY : a.s) - (c.a ? c.sd * DAY : c.s); });
+    return out.slice(0, 4000);
+  }
+  function parseWindow(text){
+    const now = Date.now();
+    return occurrences(parseICS(text), now - WIN_BACK * DAY, now + WIN_FWD * DAY);
+  }
+
+  /* ---------- server ---------- */
+  function ready(){ try{ const s = FHSync.summary(); return s.mode === 'ok' && !!s.household; }catch(e){ return false; } }
+  async function loadFeeds(){ const r = await FHSync.rpc('list_feeds'); cache.feeds = Array.isArray(r) ? r : []; persist(); }
+  async function fetchOne(f){
+    const text = await FHSync.rpc('fetch_feed', { p_id:f.id });
+    const occ = parseWindow(typeof text === 'string' ? text : '');
+    cache.data[f.id] = { at:Date.now(), n:occ.length, occ:occ, err:'' };
+  }
+  async function refresh(force){
+    if(busy || !ready()) return;
+    busy = true; lastErr = ''; emit();
+    try{
+      await loadFeeds();
+      const ids = {}; cache.feeds.forEach(function(f){ ids[f.id] = 1; });
+      Object.keys(cache.data).forEach(function(k){ if(!ids[k]) delete cache.data[k]; });
+      for(let i = 0; i < cache.feeds.length; i++){
+        const f = cache.feeds[i], d = cache.data[f.id];
+        if(!force && d && d.at && Date.now() - d.at < REFRESH_MS && !d.err) continue;
+        try{ await fetchOne(f); }catch(e){ const old = cache.data[f.id] || {}; cache.data[f.id] = Object.assign({}, old, { err:e.offline ? '' : (e.message || 'Could not load') }); if(e.offline) lastErr = 'Offline: showing the last copy.'; }
+      }
+      persist();
+    }catch(e){ lastErr = e.offline ? 'Offline: showing the last copy.' : (e.message || 'Could not load calendars'); }
+    busy = false; emit();
+    try{ refreshCurrentPage(); }catch(e){}
+  }
+  async function addFeed(url, label, who, busyOnly){
+    await FHSync.rpc('add_feed', { p_url:url, p_label:label, p_who:who, p_busy:!!busyOnly });
+    await refresh(true);
+  }
+  async function removeFeed(id){ await FHSync.rpc('remove_feed', { p_id:id }); delete cache.data[id]; await refresh(true); }
+  async function updateFeed(id, label, who, busyOnly){ await FHSync.rpc('update_feed', { p_id:id, p_label:label, p_who:who, p_busy:!!busyOnly }); await refresh(true); }
+
+  /* ---------- display ---------- */
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+  function hm(ms){ const d = new Date(ms); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function personOf(who){ try{ const ps = JSON.parse(fhRawGet('chore-chart-people-v1') || '[]'); return ps.find(function(p){ return p.id === who; }); }catch(e){ return null; } }
+  function forDay(date){
+    const dn = dayNum(date.getFullYear(), date.getMonth(), date.getDate());
+    const ds = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime(), de = ds + DAY;
+    const out = [];
+    cache.feeds.forEach(function(f){
+      const d = cache.data[f.id]; if(!d || !d.occ) return;
+      const p = personOf(f.who), color = p && p.hue != null ? 'hsl(' + p.hue + ',55%,48%)' : 'var(--accent,#6C4F8A)', name = p ? p.name : (f.label || '');
+      d.occ.forEach(function(o){
+        let hit = false, allDay = !!o.a;
+        if(o.a) hit = dn >= o.sd && dn < o.ed; else hit = o.s < de && (o.e > ds || (o.e === o.s && o.s >= ds));
+        if(!hit) return;
+        out.push({ id:'cal:' + f.id + ':' + (o.a ? o.sd : o.s), ro:true, title:o.t || 'Busy', location:o.l || '', allDay:allDay, start:allDay ? '' : hm(Math.max(o.s, ds)), end:allDay ? '' : (o.e > o.s && o.e <= de ? hm(o.e) : ''), who:name, color:color });
+      });
+    });
+    return out;
+  }
+
+  /* ---------- Settings card ---------- */
+  function card(){
+    const box = h('div', { class:'st-card', id:'stCal' });
+    function draw(){
+      box.innerHTML = '';
+      box.appendChild(h('h3', { text:'Connect calendars' }));
+      let s = null; try{ s = FHSync.summary(); }catch(e){}
+      if(!s || !s.configured){ box.appendChild(h('p', { class:'ob-hint', text:'Calendar import needs sync, which is not set up in this build.' })); return; }
+      if(s.mode !== 'ok' || !s.household){
+        box.appendChild(h('p', { class:'ob-hint', text:'Turn on “Sync across devices” first (above). Then each parent can add their Google, Outlook or iCloud calendar here and everyone sees it in Family Hub. It is read-only: edit events in the original calendar.' }));
+        return;
+      }
+      box.appendChild(h('p', { class:'ob-hint', text:'Show your Google, Outlook or iCloud calendar in Family Hub. Each parent adds their own, and it appears in their colour. It is read-only: edit events in the original calendar.' }));
+      if(lastErr) box.appendChild(h('p', { class:'ob-hint', style:'color:var(--brick-strong,#b3402a)', text:lastErr }));
+      cache.feeds.forEach(function(f){
+        const d = cache.data[f.id] || {}, p = personOf(f.who), col = p && p.hue != null ? 'hsl(' + p.hue + ',55%,48%)' : 'var(--accent,#6C4F8A)';
+        const status = d.err ? d.err : (d.at ? d.n + ' events in range · updated ' + fhAgo(d.at) : (busy ? 'Loading…' : 'Not loaded yet'));
+        const row = h('div', { class:'fhc-feed', style:'--ec:' + col },
+          h('div', { class:'fhc-main' },
+            h('div', { class:'fhc-name', text:(f.label || 'Calendar') + (p ? ' · ' + p.name : '') + (f.mine ? '' : ' (added by another parent)') }),
+            h('div', { class:'fhc-sub', style:d.err ? 'color:var(--brick-strong,#b3402a)' : '', text:status }),
+            f.busy_only ? h('div', { class:'fhc-sub', text:f.mine ? 'Family sees “Busy” only.' : 'Shows as “Busy” only.' }) : null),
+          f.mine ? h('div', { class:'fhc-btns' },
+            h('button', { type:'button', class:'ob-btn ghost', text:f.busy_only ? 'Show titles' : 'Busy only', onClick:function(){ updateFeed(f.id, f.label, f.who, !f.busy_only).catch(function(e){ alert(e.message); }); } }),
+            h('button', { type:'button', class:'ob-btn ghost', text:'Remove', onClick:function(){ if(confirm('Remove “' + (f.label || 'this calendar') + '” from Family Hub? Your original calendar is not changed.')) removeFeed(f.id).catch(function(e){ alert(e.message); }); } })) : null);
+        box.appendChild(row);
+      });
+      const parents = (function(){ try{ return JSON.parse(fhRawGet('chore-chart-people-v1') || '[]').filter(function(x){ return x.name; }); }catch(e){ return []; } })();
+      const who = h('select', { class:'ob-input' }); parents.forEach(function(x){ who.appendChild(h('option', { value:x.id, text:x.name })); });
+      const par = parents.find(function(x){ return x.role === 'parent'; }); if(par) who.value = par.id;
+      const label = h('input', { class:'ob-input', type:'text', maxlength:'40', placeholder:'Name, e.g. Matt’s work', autocomplete:'off' });
+      const link = h('input', { class:'ob-input', type:'url', placeholder:'Paste the secret iCal link', autocomplete:'off', autocapitalize:'off', spellcheck:'false' });
+      const bz = h('input', { type:'checkbox' });
+      const msg = h('p', { class:'ob-hint' });
+      const addBtn = h('button', { type:'button', class:'ob-btn', text:'Add calendar', onClick:function(){
+        msg.textContent = ''; msg.style.color = '';
+        if(!link.value.trim()){ msg.textContent = 'Paste the link first.'; return; }
+        addBtn.disabled = true; msg.textContent = 'Adding…';
+        addFeed(link.value.trim(), label.value.trim(), who.value, bz.checked).then(function(){ link.value = ''; label.value = ''; draw(); })
+          .catch(function(e){ addBtn.disabled = false; msg.style.color = 'var(--brick-strong,#b3402a)'; msg.textContent = e.offline ? 'You are offline.' : (e.message || 'Could not add that calendar'); });
+      } });
+      box.appendChild(h('div', { class:'fhc-add' },
+        h('div', { class:'fhm-sub', text:'Add a calendar' }),
+        h('label', { class:'fhe-field' }, h('span', { class:'fhe-lab', text:'Whose calendar' }), who),
+        label, link,
+        h('label', { class:'fhe-check' }, bz, h('span', { text:'Only show “Busy” to the family (hide titles)' })),
+        h('div', { class:'ob-row' }, addBtn,
+          h('button', { type:'button', class:'ob-btn ghost', text:busy ? 'Refreshing…' : 'Refresh now', onClick:function(){ refresh(true); } })),
+        msg));
+      box.appendChild(h('details', { class:'fhc-help' }, h('summary', { text:'How do I get the link?' }),
+        h('ol', {},
+          h('li', { text:'Open calendar.google.com in a browser. On a phone, use “Desktop site” in the browser menu, because the Google Calendar app does not show this.' }),
+          h('li', { text:'Tap the ⚙ settings cog, then Settings. On the left, under “Settings for my calendars”, pick your calendar.' }),
+          h('li', { text:'Scroll to “Integrate calendar” and copy “Secret address in iCal format”.' }),
+          h('li', { text:'Paste it above. Anyone with that link can read your calendar, so don’t share it. You can reset it in the same place.' })),
+        h('p', { class:'ob-hint', text:'Outlook.com: Settings → Calendar → Shared calendars → Publish a calendar → copy the ICS link. iCloud: Calendar → share icon → Public Calendar → copy link.' })));
+    }
+    onChange(function(){ if(document.getElementById('stCal') === box) draw(); });
+    try{ FHSync.onChange(function(){ if(document.getElementById('stCal') === box) draw(); }); }catch(e){}
+    draw();
+    return box;
+  }
+  function init(){
+    setTimeout(function(){ try{ refresh(false); }catch(e){} }, 1500);
+    setInterval(function(){ if(document.visibilityState === 'visible') refresh(false); }, REFRESH_MS);
+    document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible') refresh(false); });
+    try{ FHSync.onChange(function(){ if(!ready() && (cache.feeds.length)){ clear(); } else if(ready()) refresh(false); }); }catch(e){}
+  }
+  return { init:init, card:card, forDay:forDay, refresh:refresh, clear:clear, onChange:onChange, parseICS:parseICS, parseWindow:parseWindow, occurrences:occurrences, _wallToMs:wallToMs, _set:function(f, d){ cache = { feeds:f, data:d }; } };
 })();
 
 /* Shared family events: appointments, school dates, birthdays, who's working late.
@@ -9293,6 +9659,7 @@ function renderSettingsPage(){
     h('div',{class:'ob-row'}, h('button',{type:'button',class:'ob-btn ghost',id:'stExport',text:'⬇️ Export backup',onClick:fhExportBackup}),
       h('button',{type:'button',class:'ob-btn ghost',text:'⬆️ Import backup',onClick:()=>file.click()})), file, msg));
   root.appendChild(fhSyncCard());
+  root.appendChild(FHCal.card());
   root.appendChild(feedbackCard());
   root.appendChild(h('div',{class:'st-card'}, h('h3',{text:'Setup'}),
     h('p',{class:'ob-hint',text:'Run the setup questions again to start fresh with a new household, rooms, chores and meal plan.'}),
@@ -9338,7 +9705,7 @@ function showAllSet(){
   });
 }
 
-const FH_APP_VERSION = '0.20 (test build)';
+const FH_APP_VERSION = '0.22 (test build)';
 function fhFeedbackNote(){
   const L=[]; const add=(k,v)=>L.push(k+': '+v);
   add('App', 'Family Hub '+FH_APP_VERSION);
@@ -9971,7 +10338,7 @@ const FHSync = (function(){
   }
 
   return { init, summary, onChange, setConfig, sendCode, verify, createHousehold, joinHousehold, adoptHousehold,
-           leaveHousehold, newCode, disconnect, syncNow, hasLocalSetup, refreshHousehold,
+           leaveHousehold, newCode, disconnect, syncNow, hasLocalSetup, refreshHousehold, rpc,
            _merge3: merge3, _eligible: eligible };
 })();
 
@@ -10083,6 +10450,7 @@ function fhSyncSignInModal(){
   document.body.appendChild(m);
 }
 FHSync.init();
+FHCal.init();
 
 /* ==================== Startup (setup-aware) ==================== */
 MealApp.setOnChange(refreshCurrentPage);
