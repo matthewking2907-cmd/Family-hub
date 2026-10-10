@@ -2023,6 +2023,48 @@ body.kid-locked .cassignee{pointer-events:none;}
 .fhm-tick{ flex:0 0 auto; font-weight:700; }
 .fhm-empty{ padding:24px 8px; color:var(--muted,#777); text-align:center; }
 
+/* ===== v18+: hand-added shopping items ===== */
+.fhx-wrap{ margin:0 0 14px; }
+.fhx-add{ display:flex; gap:8px; margin:4px 0 10px; }
+.fhx-input{ flex:1; min-width:0; font:inherit; font-size:1rem; padding:10px 12px; border-radius:10px; border:1px solid var(--panel-line,#ddd); background:var(--white,#fff); color:inherit; }
+.fhx-x{ margin-left:auto; flex:0 0 auto; width:34px; height:34px; border-radius:8px; border:0; background:transparent; color:var(--muted,#888); font-size:0.95rem; cursor:pointer; align-self:center; }
+.fhx-x:active{ background:var(--panel,#eee); }
+.fhx-clear{ margin-top:8px; }
+
+/* ===== v19: shared events ===== */
+.fhe-block{ display:flex; flex-direction:column; gap:5px; margin:0 0 10px; }
+.fhe-ev{ display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; text-align:left; width:100%; font:inherit; color:inherit; background:var(--white,#fff); border:1px solid var(--panel-line,#ddd); border-left:5px solid var(--ec,#6C4F8A); border-radius:10px; padding:8px 10px; cursor:pointer; }
+.fhe-ev:active{ background:var(--panel,#eee); }
+.fhe-ev.ro{ border-left-style:dashed; }
+.fhe-time{ font-size:0.72rem; font-weight:700; color:var(--muted,#777); white-space:nowrap; }
+.fhe-title{ font-size:0.92rem; font-weight:700; overflow-wrap:anywhere; flex:1 1 auto; min-width:0; }
+.fhe-who{ font-size:0.7rem; font-weight:700; color:var(--ec,#6C4F8A); }
+.fhe-add{ align-self:flex-start; font:inherit; font-size:0.78rem; font-weight:700; color:var(--accent,#6C4F8A); background:transparent; border:1px dashed var(--panel-line,#ccc); border-radius:8px; padding:5px 10px; cursor:pointer; }
+.fhe-marks{ display:flex; flex-direction:column; gap:2px; }
+.fhe-mark{ font-size:0.6rem; font-weight:700; line-height:1.25; padding:1px 4px; border-radius:4px; border-left:3px solid var(--ec); background:var(--panel,#f0eef4); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fhe-more{ font-size:0.58rem; color:var(--muted,#777); font-weight:700; }
+.fhe-krow{ font-size:1.05em; padding:4px 8px; border-left:5px solid var(--ec); margin-top:6px; }
+.fhe-form{ overflow-y:auto; padding:6px 16px 20px; display:flex; flex-direction:column; gap:12px; }
+.fhe-field{ display:flex; flex-direction:column; gap:4px; }
+.fhe-lab{ font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--muted,#777); }
+.fhe-in{ font:inherit; font-size:1rem; padding:10px 12px; border-radius:10px; border:1px solid var(--panel-line,#ddd); background:var(--white,#fff); color:inherit; width:100%; box-sizing:border-box; }
+.fhe-two{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.fhe-check{ display:flex; align-items:center; gap:10px; font-weight:600; }
+.fhe-check input{ width:20px; height:20px; }
+.fhe-chips{ display:flex; flex-wrap:wrap; gap:8px; }
+.fhe-chip{ font:inherit; font-size:0.9rem; font-weight:700; padding:7px 13px; border-radius:999px; border:2px solid var(--ec); background:transparent; color:inherit; cursor:pointer; }
+.fhe-chip.on{ background:var(--ec); color:#fff; }
+.fhe-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+.fhe-err{ color:#b3261e; font-weight:600; font-size:0.85rem; min-height:1em; }
+.fhe-add-top{ margin-left:8px; }
+.month-grid{ grid-template-columns:repeat(7,minmax(0,1fr)); }
+.month-cell{ min-width:0; }
+.calendar-toolbar{ flex-wrap:wrap; gap:8px; }
+.calendar-nav{ flex-wrap:wrap; }
+.calendar-nav .fhe-add-top{ width:auto; padding:0 12px; height:32px; font-size:0.8rem; margin-left:2px; background:var(--accent,#6C4F8A); color:#fff; border-color:transparent; }
+.fhx-opts{ display:flex; gap:8px; margin:0 0 10px; }
+.fhx-sel{ flex:1 1 0; min-width:0; font:inherit; font-size:0.9rem; padding:9px 10px; border-radius:10px; border:1px solid var(--panel-line,#ddd); background:var(--white,#fff); color:inherit; }
+
 </style>
 <script>/* ==================== THEME: colour palettes + light / dark / auto ==================== */
 /* Runs in <head> so the right colours are in place before the first paint. */
@@ -2420,6 +2462,7 @@ var FHTheme = (function(){
             <button id="calPrevBtn" aria-label="Previous">‹</button>
             <button class="today-btn" id="calTodayBtn">Today</button>
             <button id="calNextBtn" aria-label="Next">›</button>
+            <button class="btn small fhe-add-top" id="calAddEvent">＋ Event</button>
           </div>
         </div>
         <div class="cal-label" id="calRangeLabel" style="margin-bottom:12px;"></div>
@@ -5776,6 +5819,7 @@ function renderShoppingListPage(container){
   thisWeekBtn.textContent = 'Jump to current shop';
   thisWeekBtn.addEventListener('click', ()=>{ resetShopCycleToToday(); renderShoppingListPage(container); });
   container.appendChild(thisWeekBtn);
+  container.appendChild(FHExtras.block(()=>renderShoppingListPage(container), anchor));
 
   const bySection = buildShoppingList();
 
@@ -5833,7 +5877,7 @@ function renderShoppingListPage(container){
     container.appendChild(freshWrap);
   }
 
-  const anyItems = Object.values(bySection).some(arr=>arr.length);
+  const anyItems = Object.values(bySection).some(arr=>arr.length) || FHExtras.count(FHExtras.ck(anchor)) > 0;
   if(!anyItems){
     const empty = document.createElement('div');
     empty.className = 'empty-note';
@@ -5845,7 +5889,8 @@ function renderShoppingListPage(container){
   { const sc = FHScratch.chips(()=>renderShoppingListPage(container)); if(sc) container.appendChild(sc); }
   SHOP_SECTIONS.forEach(section=>{
     const items = bySection[section.id];
-    if(!items.length) return;
+    const xrows = FHExtras.rows(section.id, anchor, ()=>renderShoppingListPage(container));
+    if(!items.length && !xrows.length) return;
     const heading = document.createElement('h3');
     heading.className = 'freq-section-heading';
     heading.textContent = section.emoji + ' ' + section.label;
@@ -5900,6 +5945,7 @@ function renderShoppingListPage(container){
 
       container.appendChild(row);
     });
+    xrows.forEach(r=> container.appendChild(r));
   });
 }
 
@@ -7575,6 +7621,238 @@ function fhMealSheet(date, info){
   const sel = list.querySelector('.sel'); if(sel && sel.scrollIntoView) sel.scrollIntoView({ block:'center' });
 }
 
+/* Things added to the shopping list by hand. Each has an aisle and is either for one shop week or every week.
+   Stored in brick-bites-shopping-extras-v1 (synced). Weekly items reset their tick each shop week. */
+const FHExtras = (function(){
+  const KEY = 'brick-bites-shopping-extras-v1';
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+  function ck(d){ return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }   // shop-week key
+  function load(){ try{ const v = JSON.parse(fhRawGet(KEY) || '[]'); return Array.isArray(v) ? v : []; }catch(e){ return []; } }
+  function save(list){ fhSaveJSON(KEY, list); }
+  function uid(){ return 'x' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  // items from the first version had no aisle or week: treat them as this week's
+  function norm(list, cyc){
+    let changed = false;
+    list.forEach(function(x){
+      if(!x.scope){ x.scope = 'once'; x.cycle = cyc; x.section = fhGuessSection(x.name); if(x.done){ x.doneIn = {}; x.doneIn[cyc] = 1; } delete x.done; changed = true; }
+    });
+    return changed;
+  }
+  function mine(cyc){
+    const list = load(); if(norm(list, cyc)) save(list);
+    return list.filter(function(x){ return x.scope === 'weekly' || x.cycle === cyc; });
+  }
+  function isDone(x, cyc){ return !!(x.doneIn && x.doneIn[cyc]); }
+  function count(cyc){ return mine(cyc).length; }
+  function add(text, section, scope, cyc){
+    const t = String(text || '').trim().replace(/\s+/g, ' ');
+    if(!t) return false;
+    const list = load(); norm(list, cyc);
+    if(list.some(function(x){ return x.name.toLowerCase() === t.toLowerCase() && (x.scope === 'weekly' || x.cycle === cyc); })) return false;
+    list.push({ id:uid(), name:t.slice(0, 80), section:section || fhGuessSection(t), scope:scope === 'weekly' ? 'weekly' : 'once', cycle:cyc, doneIn:{}, at:Date.now() });
+    save(list); return true;
+  }
+  // The add form that sits at the top of the shopping list.
+  function block(rerender, anchor){
+    const cyc = ck(anchor);
+    const sections = MealApp.getSections();
+    let secTouched = false;
+    const input = h('input', { type:'text', class:'fhx-input', placeholder:'Add something (e.g. bin bags, milk x2)', maxlength:'80', autocomplete:'off', enterkeyhint:'done', 'aria-label':'Add an item to the shopping list' });
+    const sec = h('select', { class:'fhx-sel', 'aria-label':'Aisle' });
+    sections.forEach(function(s){ sec.appendChild(h('option', { value:s.id, text:s.emoji + ' ' + s.label })); });
+    sec.value = 'store-cupboard';
+    sec.addEventListener('change', function(){ secTouched = true; });
+    input.addEventListener('input', function(){ if(!secTouched && input.value.trim()) sec.value = fhGuessSection(input.value); });
+    const scope = h('select', { class:'fhx-sel', 'aria-label':'How often' },
+      h('option', { value:'once', text:'This week only' }), h('option', { value:'weekly', text:'Every week' }));
+    const go = function(){
+      if(add(input.value, sec.value, scope.value, cyc)){ rerender(); const n = document.querySelector('.fhx-input'); if(n) n.focus(); }
+      else { input.value = ''; }
+    };
+    input.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); go(); } });
+    const wrap = h('div', { class:'fhx-wrap' },
+      h('div', { class:'fhx-add' }, input, h('button', { type:'button', class:'btn small', text:'Add', onClick:go })),
+      h('div', { class:'fhx-opts' }, sec, scope));
+    const done = mine(cyc).filter(function(x){ return x.scope === 'once' && isDone(x, cyc); }).length;
+    if(done) wrap.appendChild(h('button', { type:'button', class:'btn secondary small fhx-clear', text:'Clear ticked extras (' + done + ')', onClick:function(){
+      save(load().filter(function(y){ return !(y.scope === 'once' && y.cycle === cyc && isDone(y, cyc)); })); rerender(); } }));
+    return wrap;
+  }
+  // Rows for one aisle, in the same style as the meal-based rows.
+  function rows(sectionId, anchor, rerender){
+    const cyc = ck(anchor);
+    return mine(cyc).filter(function(x){ return (x.section || 'store-cupboard') === sectionId; }).map(function(it){
+      const done = isDone(it, cyc);
+      const toggle = function(){
+        const l = load(); const x = l.find(function(y){ return y.id === it.id; });
+        if(x){ x.doneIn = x.doneIn || {}; if(x.doneIn[cyc]) delete x.doneIn[cyc]; else x.doneIn[cyc] = 1;
+          const ks = Object.keys(x.doneIn).sort(); while(ks.length > 8){ delete x.doneIn[ks.shift()]; }
+          save(l); }
+        rerender();
+      };
+      return h('div', { class:'shopping-item-row' + (done ? ' checked' : '') },
+        h('span', { class:'shopping-check', text:done ? '✓' : '', onClick:toggle }),
+        h('div', { class:'shopping-item-info', onClick:toggle },
+          h('span', { class:'shopping-item-name', text:it.name }),
+          h('span', { class:'meta shopping-item-uses', text:'Added by you' + (it.scope === 'weekly' ? ' · every week' : '') })),
+        h('button', { type:'button', class:'fhx-x', 'aria-label':'Remove ' + it.name, text:'✕', onClick:function(){
+          if(it.scope === 'weekly' && !confirm('Remove “' + it.name + '” from every week?')) return;
+          save(load().filter(function(y){ return y.id !== it.id; })); rerender(); } }));
+    });
+  }
+  return { ck:ck, load:load, add:add, block:block, rows:rows, count:count, KEY:KEY };
+})();
+
+/* Shared family events: appointments, school dates, birthdays, who's working late.
+   Stored in one synced key as an array of {id,title,date,endDate,allDay,start,end,who,repeat,notes}. */
+const FHEvents = (function(){
+  const KEY = 'family-hub-events-v1';
+  const REPEATS = [['none', 'Does not repeat'], ['weekly', 'Every week'], ['fortnightly', 'Every 2 weeks'], ['monthly', 'Every month'], ['yearly', 'Every year']];
+  const DAY = 86400000;
+
+  function load(){ try{ const v = JSON.parse(fhRawGet(KEY) || '[]'); return Array.isArray(v) ? v : []; }catch(e){ return []; } }
+  function save(list){ fhSaveJSON(KEY, list); }
+  function uid(){ return 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+  function iso(d){ return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function parse(s){ const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
+  function dayNum(d){ return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY); }
+
+  function people(){ try{ const v = JSON.parse(fhRawGet('chore-chart-people-v1') || '[]'); return Array.isArray(v) ? v : []; }catch(e){ return []; } }
+  function personOf(who){ return who && who !== 'all' ? people().find(function(p){ return p.id === who; }) : null; }
+  function colorOf(who){ const p = personOf(who); return p && p.hue != null ? 'hsl(' + p.hue + ',55%,48%)' : 'var(--accent,#6C4F8A)'; }
+  function whoLabel(who){ const p = personOf(who); return p ? p.name : 'Everyone'; }
+
+  function spanDays(ev){ const a = parse(ev.date), b = parse(ev.endDate || ev.date); return a && b ? Math.max(0, dayNum(b) - dayNum(a)) : 0; }
+  function startsOn(ev, c){
+    const a = parse(ev.date); if(!a) return false;
+    const diff = dayNum(c) - dayNum(a);
+    if(diff < 0) return false;
+    switch(ev.repeat){
+      case 'weekly': return diff % 7 === 0;
+      case 'fortnightly': return diff % 14 === 0;
+      case 'monthly': return c.getDate() === a.getDate();
+      case 'yearly': return c.getDate() === a.getDate() && c.getMonth() === a.getMonth();
+      default: return diff === 0;
+    }
+  }
+  function occursOn(ev, d){
+    const s = spanDays(ev);
+    for(let i = 0; i <= s; i++){ if(startsOn(ev, new Date(d.getFullYear(), d.getMonth(), d.getDate() - i))) return true; }
+    return false;
+  }
+  function timeText(ev){ return ev.allDay ? 'All day' : (ev.start || '') + (ev.end ? '–' + ev.end : ''); }
+  function sortKey(ev){ return ev.allDay ? '00:00' : (ev.start || '99:99'); }
+  function forDay(date){
+    const own = load().filter(function(ev){ return occursOn(ev, date); });
+    let all = own;
+    if(typeof FHCal !== 'undefined' && FHCal.forDay){ all = own.concat(FHCal.forDay(date)); }
+    return all.sort(function(a, b){ return (a.allDay ? 0 : 1) - (b.allDay ? 0 : 1) || sortKey(a).localeCompare(sortKey(b)) || String(a.title).localeCompare(String(b.title)); });
+  }
+  function refresh(){ try{ refreshCurrentPage(); }catch(e){} }
+
+  function dayBlock(date, opts){
+    opts = opts || {};
+    const list = forDay(date);
+    const wrap = h('div', { class:'fhe-block' });
+    list.forEach(function(ev){
+      const row = h('button', { type:'button', class:'fhe-ev' + (ev.ro ? ' ro' : ''), style:'--ec:' + (ev.ro ? ev.color : colorOf(ev.who)), onClick:function(){ ev.ro ? openInfo(ev) : openEditor({ ev:ev, date:date }); } },
+        h('span', { class:'fhe-time', text:timeText(ev) }),
+        h('span', { class:'fhe-title', text:ev.title || '(no title)' }),
+        h('span', { class:'fhe-who', text:ev.ro ? (ev.who || '') : (ev.who && ev.who !== 'all' ? whoLabel(ev.who) : '') }));
+      wrap.appendChild(row);
+    });
+    if(opts.add !== false) wrap.appendChild(h('button', { type:'button', class:'fhe-add', text:'＋ Event', onClick:function(){ openEditor({ date:date }); } }));
+    return wrap;
+  }
+  function monthMarks(date){
+    const list = forDay(date);
+    if(!list.length) return null;
+    const box = h('div', { class:'fhe-marks' });
+    list.slice(0, 2).forEach(function(ev){ box.appendChild(h('div', { class:'fhe-mark', style:'--ec:' + (ev.ro ? ev.color : colorOf(ev.who)), text:ev.title || '(no title)' })); });
+    if(list.length > 2) box.appendChild(h('div', { class:'fhe-more', text:'+' + (list.length - 2) + ' more' }));
+    return box;
+  }
+  function kitchenCard(date){
+    const list = forDay(date); if(!list.length) return null;
+    const card = h('div', { class:'fhk-card' }, h('div', { class:'fhk-label', text:'Today’s events' }));
+    list.slice(0, 6).forEach(function(ev){ card.appendChild(h('div', { class:'fhe-krow', style:'--ec:' + (ev.ro ? ev.color : colorOf(ev.who)) }, h('b', { text:timeText(ev) }), ' ' + (ev.title || ''))); });
+    return card;
+  }
+
+  /* ---- editor ---- */
+  function field(label, node){ return h('label', { class:'fhe-field' }, h('span', { class:'fhe-lab', text:label }), node); }
+  function openEditor(o){
+    if(document.getElementById('fhEventSheet')) return;
+    const editing = !!(o.ev && o.ev.id);
+    const ev = Object.assign({ id:uid(), title:'', date:iso(o.date || new Date()), endDate:'', allDay:true, start:'09:00', end:'10:00', who:'all', repeat:'none', notes:'' }, o.ev || {});
+    const close = function(){ const m = document.getElementById('fhEventSheet'); if(m) m.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = function(e){ if(e.key === 'Escape') close(); };
+    const title = h('input', { type:'text', class:'fhe-in', maxlength:'80', placeholder:'e.g. Dentist, Parents evening, Mum working late', value:ev.title, autocomplete:'off' });
+    const date = h('input', { type:'date', class:'fhe-in', value:ev.date });
+    const endDate = h('input', { type:'date', class:'fhe-in', value:ev.endDate || '' });
+    const allDay = h('input', { type:'checkbox', checked:!!ev.allDay });
+    const start = h('input', { type:'time', class:'fhe-in', value:ev.start || '09:00' });
+    const end = h('input', { type:'time', class:'fhe-in', value:ev.end || '' });
+    const repeat = h('select', { class:'fhe-in' }); REPEATS.forEach(function(r){ const op = h('option', { value:r[0], text:r[1] }); if(r[0] === (ev.repeat || 'none')) op.selected = true; repeat.appendChild(op); });
+    const notes = h('textarea', { class:'fhe-in', rows:'2', maxlength:'300', placeholder:'Notes (optional)', value:ev.notes || '' });
+    let who = ev.who || 'all';
+    const chips = h('div', { class:'fhe-chips' });
+    const drawChips = function(){
+      chips.innerHTML = '';
+      [{ id:'all', name:'Everyone' }].concat(people().filter(function(p){ return p.name; })).forEach(function(p){
+        chips.appendChild(h('button', { type:'button', class:'fhe-chip' + (p.id === who ? ' on' : ''), style:'--ec:' + colorOf(p.id), text:p.name, onClick:function(){ who = p.id; drawChips(); } }));
+      });
+    };
+    drawChips();
+    const timeRow = h('div', { class:'fhe-two' }, field('Starts', start), field('Ends', end));
+    const endRow = field('Last day (for trips and holidays)', endDate);
+    const sync = function(){ timeRow.style.display = allDay.checked ? 'none' : ''; endRow.style.display = allDay.checked ? '' : 'none'; };
+    allDay.addEventListener('change', sync); sync();
+    const err = h('div', { class:'fhe-err' });
+    const saveBtn = h('button', { type:'button', class:'btn', text:'Save', onClick:function(){
+      const t = title.value.trim();
+      if(!t){ err.textContent = 'Give it a name.'; title.focus(); return; }
+      if(!parse(date.value)){ err.textContent = 'Pick a date.'; return; }
+      if(allDay.checked && endDate.value && endDate.value < date.value){ err.textContent = 'The last day can’t be before the first.'; return; }
+      if(!allDay.checked && end.value && start.value && end.value < start.value){ err.textContent = 'The end time is before the start.'; return; }
+      const out = { id:ev.id, title:t.slice(0, 80), date:date.value, endDate:allDay.checked && endDate.value && endDate.value !== date.value ? endDate.value : '', allDay:allDay.checked,
+        start:allDay.checked ? '' : (start.value || ''), end:allDay.checked ? '' : (end.value || ''), who:who, repeat:repeat.value, notes:notes.value.trim().slice(0, 300) };
+      const list = load(); const i = list.findIndex(function(x){ return x.id === out.id; });
+      if(i >= 0) list[i] = out; else list.push(out);
+      save(list); close(); refresh();
+    } });
+    const delBtn = editing ? h('button', { type:'button', class:'btn secondary', text:'Delete', onClick:function(){
+      if(!confirm('Delete “' + (ev.title || 'this event') + '”' + (ev.repeat && ev.repeat !== 'none' ? ' and all its repeats' : '') + '?')) return;
+      save(load().filter(function(x){ return x.id !== ev.id; })); close(); refresh();
+    } }) : null;
+    const m = h('div', { id:'fhEventSheet', class:'fhm-back', onClick:function(e){ if(e.target === m) close(); } },
+      h('div', { class:'fhm-sheet', role:'dialog', 'aria-label':editing ? 'Edit event' : 'Add event' },
+        h('div', { class:'fhm-head' }, h('div', { class:'fhm-title', text:editing ? 'Edit event' : 'Add event' }), h('button', { type:'button', class:'fhm-x', 'aria-label':'Close', text:'✕', onClick:close })),
+        h('div', { class:'fhe-form' },
+          field('What', title), field('Date', date),
+          h('label', { class:'fhe-check' }, allDay, h('span', { text:'All day' })),
+          timeRow, endRow,
+          h('div', { class:'fhe-field' }, h('span', { class:'fhe-lab', text:'Who' }), chips),
+          field('Repeats', repeat), notes, err,
+          h('div', { class:'fhe-actions' }, saveBtn, h('button', { type:'button', class:'btn secondary', text:'Cancel', onClick:close }), delBtn))));
+    document.body.appendChild(m);
+    document.addEventListener('keydown', onKey);
+    if(!editing) title.focus();
+  }
+  /* read-only detail for imported calendar events */
+  function openInfo(ev){
+    if(document.getElementById('fhEventSheet')) return;
+    const close = function(){ const m = document.getElementById('fhEventSheet'); if(m) m.remove(); };
+    const m = h('div', { id:'fhEventSheet', class:'fhm-back', onClick:function(e){ if(e.target === m) close(); } },
+      h('div', { class:'fhm-sheet', role:'dialog' },
+        h('div', { class:'fhm-head' }, h('div', {}, h('div', { class:'fhm-title', text:ev.title || 'Busy' }), h('div', { class:'fhm-sub', text:timeText(ev) + (ev.who ? ' · ' + ev.who + '’s calendar' : '') })), h('button', { type:'button', class:'fhm-x', text:'✕', 'aria-label':'Close', onClick:close })),
+        h('div', { class:'fhe-form' }, ev.location ? h('div', { text:'📍 ' + ev.location }) : null, h('div', { class:'fhm-sub', text:'Imported from a connected calendar. Edit it there.' }))));
+    document.body.appendChild(m);
+  }
+  return { KEY:KEY, load:load, save:save, forDay:forDay, dayBlock:dayBlock, monthMarks:monthMarks, kitchenCard:kitchenCard, openEditor:openEditor, colorOf:colorOf, iso:iso, occursOn:occursOn };
+})();
+
 // Builds (or removes, if already open) an inline meal-picker under a meal
 // card — lets any day view (Today, Tomorrow, Calendar drill-in, or a range
 // column) swap that day's dinner without going to the Meal Plan tab.
@@ -7637,6 +7915,7 @@ function toggleMealPicker(card, date, info){
 function buildCombinedDay(date, opts){
   const wrap = document.createElement('div');
   wrap.className = 'combined-day';
+  wrap.appendChild(FHEvents.dayBlock(date));
   if(Feature.on('meals')) wrap.appendChild(buildMealCard(date));
   if(Feature.on('chores')) wrap.appendChild(ChoreApp.buildDayBlock(date, opts));
   return wrap;
@@ -7731,6 +8010,7 @@ function buildMonthGrid(monthDate){
       choresEl.textContent = summary.done + '/' + summary.total + ' chores';
       cell.appendChild(choresEl);
     }
+    { const em = FHEvents.monthMarks(date); if(em) cell.appendChild(em); }
     cell.addEventListener('click', ()=> openDayDetail(date));
     grid.appendChild(cell);
   }
@@ -7758,6 +8038,7 @@ function buildRangeDayColumn(date){
   head.addEventListener('click', ()=> openDayDetail(date));
   col.appendChild(head);
 
+  col.appendChild(FHEvents.dayBlock(date));
   if(Feature.on('meals')) col.appendChild(buildMealCard(date));
   if(Feature.on('chores')) col.appendChild(ChoreApp.buildDayBlock(date, { showHeader:false }));
   return col;
@@ -7818,6 +8099,7 @@ function renderCalendarPage(){
 document.querySelectorAll('#rangeToggle button').forEach(btn=>{
   btn.addEventListener('click', ()=> setCalendarMode(btn.dataset.range));
 });
+document.getElementById('calAddEvent').addEventListener('click', ()=> FHEvents.openEditor({ date: calendarMode==='month' ? monthAnchor : new Date() }));
 document.getElementById('calPrevBtn').addEventListener('click', ()=>{
   if(calendarMode==='3day') calendarAnchor = shAddDays(calendarAnchor, -3);
   else if(calendarMode==='week' || calendarMode==='shopweek') calendarAnchor = shAddDays(calendarAnchor, -7);
@@ -9056,7 +9338,7 @@ function showAllSet(){
   });
 }
 
-const FH_APP_VERSION = '0.17 (test build)';
+const FH_APP_VERSION = '0.20 (test build)';
 function fhFeedbackNote(){
   const L=[]; const add=(k,v)=>L.push(k+': '+v);
   add('App', 'Family Hub '+FH_APP_VERSION);
@@ -9164,7 +9446,7 @@ const FHKitchen = (function(){
     tickClock();
     const wrap = el.querySelector('.fhk-main'); wrap.innerHTML = '';
     const left = mk('div','fhk-col'), right = mk('div','fhk-col');
-    const sc = shopCard(now); if(sc) left.appendChild(sc);
+    const sc = shopCard(now); if(sc) left.appendChild(sc); { const ec = FHEvents.kitchenCard(now); if(ec) left.appendChild(ec); }
     if(Feature.on('meals')){
       left.appendChild(mealCard(now));
       const tm = shAddDays(now, 1); let ti = null; try{ ti = MealApp.getDayDisplay(tm); }catch(e){}
@@ -9415,7 +9697,7 @@ const FHSync = (function(){
   const ST_KEY  = 'fhsync:state';     // sign-in + sync bookkeeping; never exported in backups, never synced
   const BUILD = (typeof FH_SYNC_BUILD !== 'undefined' && FH_SYNC_BUILD && FH_SYNC_BUILD.url) ? FH_SYNC_BUILD : null;
   const SHARED_EXACT = { 'family-hub-config-v1':1, 'family-hub-locale-v1':1, 'family-hub-meal-rules-v1':1,
-                         'family-hub-hidden-meals-v1':1, 'family-hub-scratch-v1':1, 'family-hub-starter-chores-v1':1, 'family-hub-starter-plan-v1':1 };
+                         'family-hub-hidden-meals-v1':1, 'family-hub-scratch-v1':1, 'family-hub-starter-chores-v1':1, 'family-hub-starter-plan-v1':1, 'family-hub-events-v1':1 };
   // Per-device settings (parent PIN, theme, kitchen display, running timers, setup draft) are deliberately NOT shared.
   function eligible(k){ return !!SHARED_EXACT[k] || k.indexOf('brick-bites-') === 0 || k.indexOf('chore-chart-') === 0; }
 
