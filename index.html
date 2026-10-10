@@ -2000,6 +2000,29 @@ body.kid-locked .cassignee{pointer-events:none;}
 .fhs-steps li{ margin-bottom:4px; }
 .fhs-tip{ margin:4px 0 0; font-size:.85rem; color:var(--muted); }
 
+/* ===== v17: week view wraps on tablets; meal chooser sheet ===== */
+.range-days{ display:grid; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); gap:12px; align-items:start; }
+@media (max-width: 780px){
+  .range-days{ display:flex; gap:10px; }
+}
+.fhm-back{ position:fixed; inset:0; z-index:3500; background:rgba(0,0,0,.55); display:flex; align-items:flex-end; justify-content:center; }
+.fhm-sheet{ background:var(--cream,#fff); color:var(--ink,#222); width:100%; max-width:560px; max-height:88vh; border-radius:18px 18px 0 0; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 -6px 30px rgba(0,0,0,.3); }
+@media (min-width:700px){ .fhm-back{ align-items:center; } .fhm-sheet{ border-radius:18px; max-height:80vh; } }
+.fhm-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding:16px 16px 8px; }
+.fhm-title{ font-size:1.1rem; font-weight:700; }
+.fhm-sub{ font-size:0.8rem; color:var(--muted,#777); margin-top:2px; }
+.fhm-x{ border:1px solid var(--panel-line,#ddd); background:transparent; color:inherit; border-radius:10px; width:38px; height:38px; font-size:1rem; cursor:pointer; flex:0 0 auto; }
+.fhm-search{ margin:4px 16px 8px; padding:11px 12px; font:inherit; font-size:1rem; border-radius:10px; border:1px solid var(--panel-line,#ddd); background:var(--white,#fff); color:inherit; }
+.fhm-list{ overflow-y:auto; padding:0 10px 18px; -webkit-overflow-scrolling:touch; }
+.fhm-cat{ font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--muted,#777); padding:14px 8px 6px; position:sticky; top:0; background:var(--cream,#fff); }
+.fhm-row{ display:flex; align-items:center; gap:10px; width:100%; text-align:left; font:inherit; font-size:1rem; line-height:1.3; color:inherit; background:transparent; border:0; border-bottom:1px solid var(--panel-line,#eee); padding:13px 8px; cursor:pointer; min-height:48px; }
+.fhm-row:active{ background:var(--panel,#eee); }
+.fhm-row.sel{ font-weight:700; color:var(--accent,#6C4F8A); }
+.fhm-name{ flex:1 1 auto; min-width:0; overflow-wrap:anywhere; }
+.fhm-meta{ flex:0 0 auto; font-size:0.8rem; color:var(--muted,#777); white-space:nowrap; }
+.fhm-tick{ flex:0 0 auto; font-weight:700; }
+.fhm-empty{ padding:24px 8px; color:var(--muted,#777); text-align:center; }
+
 </style>
 <script>/* ==================== THEME: colour palettes + light / dark / auto ==================== */
 /* Runs in <head> so the right colours are in place before the first paint. */
@@ -7504,10 +7527,59 @@ function buildMealCard(date){
   return card;
 }
 
+/* Meal chooser sheet: searchable, wrapping list (replaces the native dropdown) */
+function fhMealSheet(date, info){
+  if(document.getElementById('fhMealSheet')) return;
+  const cur = (info && info.mealId) || '';
+  const close = function(){ const m = document.getElementById('fhMealSheet'); if(m) m.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = function(e){ if(e.key === 'Escape') close(); };
+  const pick = function(id){ close(); MealApp.setDayMeal(date, id || null); };
+  const search = h('input', { type:'search', class:'fhm-search', placeholder:'Search meals', autocomplete:'off', 'aria-label':'Search meals' });
+  const list = h('div', { class:'fhm-list' });
+  const row = function(id, name, meta){
+    const b = h('button', { type:'button', class:'fhm-row' + (id === cur ? ' sel' : ''), onClick:function(){ pick(id); } },
+      h('span', { class:'fhm-name', text:name }),
+      meta ? h('span', { class:'fhm-meta', text:meta }) : null,
+      id === cur ? h('span', { class:'fhm-tick', text:'✓' }) : null);
+    return b;
+  };
+  const cats = MealApp.listCategories();
+  const all = MealApp.listAllMeals();
+  const draw = function(){
+    const q = search.value.trim().toLowerCase();
+    list.innerHTML = '';
+    if(!q) list.appendChild(row('', 'No meal planned', ''));
+    let shown = 0;
+    cats.forEach(function(cat){
+      const inCat = all.filter(function(m){ return m.cat === cat.id && (!q || m.name.toLowerCase().indexOf(q) !== -1); });
+      if(!inCat.length) return;
+      list.appendChild(h('div', { class:'fhm-cat', text:cat.emoji + ' ' + cat.label }));
+      inCat.forEach(function(m){
+        const t = (FHRecipes.timeSuffix(m.id) || '').replace(/^\s*·\s*/, '');
+        list.appendChild(row(m.id, m.name, t)); shown++;
+      });
+    });
+    if(q && !shown) list.appendChild(h('div', { class:'fhm-empty', text:'No meals match "' + search.value.trim() + '".' }));
+  };
+  search.addEventListener('input', draw);
+  const dt = date.toLocaleDateString(undefined, { weekday:'long', day:'numeric', month:'long' });
+  const m = h('div', { id:'fhMealSheet', class:'fhm-back', onClick:function(e){ if(e.target === m) close(); } },
+    h('div', { class:'fhm-sheet', role:'dialog', 'aria-label':'Choose a meal' },
+      h('div', { class:'fhm-head' },
+        h('div', {}, h('div', { class:'fhm-title', text:'Choose a meal' }), h('div', { class:'fhm-sub', text:dt })),
+        h('button', { type:'button', class:'fhm-x', 'aria-label':'Close', text:'✕', onClick:close })),
+      search, list));
+  document.body.appendChild(m);
+  document.addEventListener('keydown', onKey);
+  draw();
+  const sel = list.querySelector('.sel'); if(sel && sel.scrollIntoView) sel.scrollIntoView({ block:'center' });
+}
+
 // Builds (or removes, if already open) an inline meal-picker under a meal
 // card — lets any day view (Today, Tomorrow, Calendar drill-in, or a range
 // column) swap that day's dinner without going to the Meal Plan tab.
 function toggleMealPicker(card, date, info){
+  fhMealSheet(date, info); return;
   const existing = card.querySelector('.meal-picker');
   if(existing){ existing.remove(); return; }
   document.querySelectorAll('.meal-picker').forEach(p=> p.remove());
@@ -8984,7 +9056,7 @@ function showAllSet(){
   });
 }
 
-const FH_APP_VERSION = '0.16 (test build)';
+const FH_APP_VERSION = '0.17 (test build)';
 function fhFeedbackNote(){
   const L=[]; const add=(k,v)=>L.push(k+': '+v);
   add('App', 'Family Hub '+FH_APP_VERSION);
