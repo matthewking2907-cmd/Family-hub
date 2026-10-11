@@ -8250,9 +8250,11 @@ const FHEvents = (function(){
   function dayNum(d){ return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY); }
 
   function people(){ try{ const v = JSON.parse(fhRawGet('chore-chart-people-v1') || '[]'); return Array.isArray(v) ? v : []; }catch(e){ return []; } }
-  function personOf(who){ return who && who !== 'all' ? people().find(function(p){ return p.id === who; }) : null; }
-  function colorOf(who){ const p = personOf(who); return p && p.hue != null ? 'hsl(' + p.hue + ',55%,48%)' : 'var(--accent,#6C4F8A)'; }
-  function whoLabel(who){ const p = personOf(who); return p ? p.name : 'Everyone'; }
+  /* who is 'all', one person id, or an array of ids (older events only ever have the first two) */
+  function whoIds(who){ return Array.isArray(who) ? who.filter(Boolean) : (who && who !== 'all' ? [who] : []); }
+  function whoPeople(who){ const ps = people(); return whoIds(who).map(function(id){ return ps.find(function(p){ return p.id === id; }); }).filter(Boolean); }
+  function colorOf(who){ const p = whoPeople(who)[0]; return p && p.hue != null ? 'hsl(' + p.hue + ',55%,48%)' : 'var(--accent,#6C4F8A)'; }
+  function whoLabel(who){ const ps = whoPeople(who); return ps.length ? ps.map(function(p){ return p.name; }).join(', ') : 'Everyone'; }
 
   function spanDays(ev){ const a = parse(ev.date), b = parse(ev.endDate || ev.date); return a && b ? Math.max(0, dayNum(b) - dayNum(a)) : 0; }
   function startsOn(ev, c){
@@ -8290,7 +8292,7 @@ const FHEvents = (function(){
       const row = h('button', { type:'button', class:'fhe-ev' + (ev.ro ? ' ro' : ''), style:'--ec:' + (ev.ro ? ev.color : colorOf(ev.who)), onClick:function(){ ev.ro ? openInfo(ev) : openEditor({ ev:ev, date:date }); } },
         h('span', { class:'fhe-time', text:timeText(ev) }),
         h('span', { class:'fhe-title', text:ev.title || '(no title)' }),
-        h('span', { class:'fhe-who', text:ev.ro ? (ev.who || '') : (ev.who && ev.who !== 'all' ? whoLabel(ev.who) : '') }));
+        h('span', { class:'fhe-who', text:ev.ro ? (ev.who || '') : (whoPeople(ev.who).length ? whoLabel(ev.who) : '') }));
       wrap.appendChild(row);
     });
     if(opts.add !== false) wrap.appendChild(h('button', { type:'button', class:'fhe-add', text:'＋ Event', onClick:function(){ openEditor({ date:date }); } }));
@@ -8327,14 +8329,20 @@ const FHEvents = (function(){
     const end = h('input', { type:'time', class:'fhe-in', value:ev.end || '' });
     const repeat = h('select', { class:'fhe-in' }); REPEATS.forEach(function(r){ const op = h('option', { value:r[0], text:r[1] }); if(r[0] === (ev.repeat || 'none')) op.selected = true; repeat.appendChild(op); });
     const notes = h('textarea', { class:'fhe-in', rows:'2', maxlength:'300', placeholder:'Notes (optional)', value:ev.notes || '' });
-    let who = ev.who || 'all';
+    const named = people().filter(function(p){ return p.name; });
+    let picked = whoIds(ev.who).filter(function(id){ return named.some(function(p){ return p.id === id; }); });
     const chips = h('div', { class:'fhe-chips' });
+    const chip = function(id, name, on, pressed){ chips.appendChild(h('button', { type:'button', class:'fhe-chip' + (on ? ' on' : ''), 'aria-pressed':on ? 'true' : 'false', style:'--ec:' + colorOf(id), text:name, onClick:pressed })); };
     const drawChips = function(){
       chips.innerHTML = '';
-      [{ id:'all', name:'Everyone' }].concat(people().filter(function(p){ return p.name; })).forEach(function(p){
-        chips.appendChild(h('button', { type:'button', class:'fhe-chip' + (p.id === who ? ' on' : ''), style:'--ec:' + colorOf(p.id), text:p.name, onClick:function(){ who = p.id; drawChips(); } }));
+      chip('all', 'Everyone', !picked.length, function(){ picked = []; drawChips(); });
+      named.forEach(function(p){
+        const on = picked.indexOf(p.id) >= 0;
+        chip(p.id, p.name, on, function(){ picked = on ? picked.filter(function(id){ return id !== p.id; }) : picked.concat(p.id); drawChips(); });
       });
     };
+    /* everyone picked is the same as Everyone; one person is stored as a plain id so older devices still read it */
+    const whoValue = function(){ return !picked.length || picked.length === named.length ? 'all' : picked.length === 1 ? picked[0] : picked.slice(); };
     drawChips();
     const timeRow = h('div', { class:'fhe-two' }, field('Starts', start), field('Ends', end));
     const endRow = field('Last day (for trips and holidays)', endDate);
@@ -8348,7 +8356,7 @@ const FHEvents = (function(){
       if(allDay.checked && endDate.value && endDate.value < date.value){ err.textContent = 'The last day can’t be before the first.'; return; }
       if(!allDay.checked && end.value && start.value && end.value < start.value){ err.textContent = 'The end time is before the start.'; return; }
       const out = { id:ev.id, title:t.slice(0, 80), date:date.value, endDate:allDay.checked && endDate.value && endDate.value !== date.value ? endDate.value : '', allDay:allDay.checked,
-        start:allDay.checked ? '' : (start.value || ''), end:allDay.checked ? '' : (end.value || ''), who:who, repeat:repeat.value, notes:notes.value.trim().slice(0, 300) };
+        start:allDay.checked ? '' : (start.value || ''), end:allDay.checked ? '' : (end.value || ''), who:whoValue(), repeat:repeat.value, notes:notes.value.trim().slice(0, 300) };
       const list = load(); const i = list.findIndex(function(x){ return x.id === out.id; });
       if(i >= 0) list[i] = out; else list.push(out);
       save(list); close(); refresh();
@@ -8364,7 +8372,7 @@ const FHEvents = (function(){
           field('What', title), field('Date', date),
           h('label', { class:'fhe-check' }, allDay, h('span', { text:'All day' })),
           timeRow, endRow,
-          h('div', { class:'fhe-field' }, h('span', { class:'fhe-lab', text:'Who' }), chips),
+          h('div', { class:'fhe-field' }, h('span', { class:'fhe-lab', text:'Who (tap everyone it’s for)' }), chips),
           field('Repeats', repeat), notes, err,
           h('div', { class:'fhe-actions' }, saveBtn, h('button', { type:'button', class:'btn secondary', text:'Cancel', onClick:close }), delBtn))));
     document.body.appendChild(m);
