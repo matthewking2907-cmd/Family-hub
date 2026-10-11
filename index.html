@@ -2159,6 +2159,29 @@ body.kid-locked #manageChores{ display:none !important; }
 .fht-up b{ flex:0 0 4.2em; }
 .fht-up span{ flex:1; min-width:0; overflow-wrap:anywhere; }
 
+/* ===== v28: day dashboard (Today, Tomorrow, calendar day) ===== */
+.fhd{ display:flex; flex-direction:column; gap:18px; }
+.fhd-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 8px; min-height:32px; }
+.fhd-title{ font-size:.74rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:var(--muted,#777); }
+.fhd-acts{ display:flex; gap:8px; }
+.fhd-acts .fhe-add{ margin:0; }
+.fhd-plans{ display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap:8px 14px; align-items:start; }
+.fhd-plans > .fhe-block, .fhd-plans > .fht-block{ display:contents; }
+.fhd-empty{ color:var(--muted,#777); font-size:.92rem; padding:4px 0; }
+.fhd-ings{ margin-top:10px; }
+.fhd-ings summary{ cursor:pointer; font-size:.78rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--muted,#777); padding:4px 0; }
+.fhd-ings ul{ list-style:none; margin:6px 0 0; padding:0; columns:2 170px; column-gap:22px; font-size:.92rem; }
+.fhd-ings li{ break-inside:avoid; padding:3px 0; border-bottom:1px solid var(--panel-line,rgba(128,128,128,.2)); }
+@media (min-width: 900px){
+  .fhd-dinner .meal-card.fhd-has-ings{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); column-gap:28px; align-items:start; }
+  .fhd-dinner .meal-card.fhd-has-ings > *{ grid-column:1; }
+  .fhd-dinner .meal-card.fhd-has-ings > .fhd-ings{ grid-column:2; grid-row:1 / span 30; margin-top:0; padding-left:24px; border-left:1px solid var(--panel-line,rgba(128,128,128,.25)); }
+  .fhd-dinner .meal-title{ font-size:1.3rem; }
+  .fhd-chores .day-block{ columns:2 380px; column-gap:16px; }
+  .fhd-chores .day-block > *{ break-inside:avoid; display:block; margin-bottom:12px; }
+}
+.fht-krow.done b{ text-decoration:line-through; opacity:.55; }
+
 </style>
 <script>/* ==================== THEME: colour palettes + light / dark / auto ==================== */
 /* Runs in <head> so the right colours are in place before the first paint. */
@@ -3411,7 +3434,15 @@ const FHRecipes = (function(){
   loadTimers();
   if(timers.length){ ensureTick(); document.addEventListener('DOMContentLoaded', renderDock); setTimeout(renderDock, 300); }
 
-  return { get, total, hands, fmtMin, dietTags, passes, state, filterBar, mountFilter, activeCount, reset, timeSuffix, badges, cardBits, open, close, startTimer };
+  // Scaled ingredient lines for a meal (for the Today / Tomorrow dinner card)
+  function ingLines(id){
+    const meal = (typeof MealApp !== 'undefined' && MealApp.getCatalog().find(m => m.id === id)) || null;
+    if(!meal || !(meal.ingredients || []).length) return [];
+    const size = (meal.servesOverride) || (MealApp.getHouseholdSize ? MealApp.getHouseholdSize() : 4) || 4, scale = size / 4;
+    const fmtQ = (n, unit) => { const lc = FHLocale.qty(n, unit); const q = lc ? lc.n : niceQty(n, unit), u = lc ? lc.u : plural(FHLocale.unit(unit), n); return q + (u ? ' ' + u : ''); };
+    return { size: size, lines: meal.ingredients.map(i => ({ qty: i.qty ? fmtQ(i.perPerson ? i.qty * size : i.qty * scale, i.unit) : '', name: i.name })) };
+  }
+  return { ingLines, get, total, hands, fmtMin, dietTags, passes, state, filterBar, mountFilter, activeCount, reset, timeSuffix, badges, cardBits, open, close, startTimer };
 })();
 FHLocale.applyRecipes();
 
@@ -8530,11 +8561,11 @@ const FHTasks = (function(){
     return h('div', { class:'fht-mark', text:'☑ ' + n + (n === 1 ? ' task' : ' tasks') });
   }
   function kitchenCard(date){
-    const list = forDay(date).filter(function(t){ return !t.done; }); if(!list.length) return null;
+    const list = forDay(date); if(!list.length) return null;
     const card = h('div', { class:'fhk-card' }, h('div', { class:'fhk-label', text:'Tasks due' }));
     list.slice(0, 8).forEach(function(t){
       const od = overdue(t);
-      card.appendChild(h('div', { class:'fht-krow', style:'--ec:' + colorOf(t.who) }, tick(t, true),
+      card.appendChild(h('div', { class:'fht-krow' + (t.done ? ' done' : ''), style:'--ec:' + colorOf(t.who) }, tick(t, true),
         h('span', { class:'fht-ktxt' }, h('b', { text:t.title }), h('small', { text:[od ? 'Overdue' : (t.time ? timeLabel(t) : ''), whoName(t.who)].filter(Boolean).join(' · ') }))));
     });
     return card;
@@ -8654,6 +8685,45 @@ const FHTasks = (function(){
   return { KEY:KEY, load:load, save:save, forDay:forDay, dayBlock:dayBlock, monthMarks:monthMarks, kitchenCard:kitchenCard, kitchenUpcoming:kitchenUpcoming, openEditor:openEditor, render:render, overdue:overdue, iso:iso };
 })();
 
+/* Today / Tomorrow (and a calendar day) as three tidy sections: Plans (events + tasks), Dinner (with ingredients), Chores. */
+function fhDayDash(date){
+  const wrap = h('div', { class:'fhd' });
+  const iso = FHEvents.iso(date);
+  // ---- plans
+  const evs = FHEvents.forDay(date), tks = Feature.on('tasks') ? FHTasks.forDay(date) : [];
+  const acts = h('div', { class:'fhd-acts fht-admin' },
+    h('button', { type:'button', class:'fhe-add', text:'＋ Event', onClick:function(){ FHEvents.openEditor({ date:date }); } }),
+    Feature.on('tasks') ? h('button', { type:'button', class:'fhe-add', text:'＋ Task', onClick:function(){ FHTasks.openEditor({ task:{ due:iso } }); } }) : null);
+  const body = h('div', { class:'fhd-plans' });
+  if(evs.length) body.appendChild(FHEvents.dayBlock(date, { add:false }));
+  if(tks.length) body.appendChild(FHTasks.dayBlock(date));
+  if(!evs.length && !tks.length) body.appendChild(h('div', { class:'fhd-empty', text:'Nothing planned.' }));
+  const n = evs.length + tks.filter(function(t){ return !t.done; }).length;
+  wrap.appendChild(h('section', { class:'fhd-sec fhd-plans-sec' },
+    h('div', { class:'fhd-head' }, h('span', { class:'fhd-title', text:'Plans' + (n ? ' · ' + n : '') }), acts), body));
+  // ---- dinner
+  if(Feature.on('meals')){
+    const card = buildMealCard(date);
+    let info = null; try{ info = MealApp.getDayDisplay(date); }catch(e){}
+    const ing = info && info.mealId && FHRecipes.ingLines ? FHRecipes.ingLines(info.mealId) : [];
+    const sec = h('section', { class:'fhd-sec fhd-dinner' }, h('div', { class:'fhd-head' }, h('span', { class:'fhd-title', text:'Dinner' })), card);
+    if(ing && ing.lines && ing.lines.length){
+      card.classList.add('fhd-has-ings');
+      const d = h('details', { class:'fhd-ings' }, h('summary', { text:'Ingredients · ' + ing.size + (ing.size === 1 ? ' person' : ' people') }),
+        h('ul', {}, ing.lines.map(function(l){ return h('li', {}, l.qty ? h('b', { text:l.qty + ' ' }) : null, l.name); })));
+      try{ if(window.matchMedia('(min-width: 900px)').matches) d.open = true; }catch(e){}
+      card.appendChild(d);
+    }
+    wrap.appendChild(sec);
+  }
+  // ---- chores
+  if(Feature.on('chores')){
+    wrap.appendChild(h('section', { class:'fhd-sec fhd-chores' }, h('div', { class:'fhd-head' }, h('span', { class:'fhd-title', text:'Chores' })),
+      ChoreApp.buildDayBlock(date, { showHeader:false })));
+  }
+  return wrap;
+}
+
 // Builds (or removes, if already open) an inline meal-picker under a meal
 // card — lets any day view (Today, Tomorrow, Calendar drill-in, or a range
 // column) swap that day's dinner without going to the Meal Plan tab.
@@ -8733,7 +8803,7 @@ function renderTodayPage(){
   h.className = 'dash-heading';
   h.textContent = 'Today — ' + date.toLocaleDateString(undefined,{ weekday:'long', day:'numeric', month:'long' });
   root.appendChild(h);
-  root.appendChild(buildCombinedDay(date, { showHeader:false }));
+  root.appendChild(fhDayDash(date));
 }
 function renderTomorrowPage(){
   const root = document.getElementById('tomorrowContent');
@@ -8744,7 +8814,7 @@ function renderTomorrowPage(){
   h.className = 'dash-heading';
   h.textContent = 'Tomorrow — ' + date.toLocaleDateString(undefined,{ weekday:'long', day:'numeric', month:'long' });
   root.appendChild(h);
-  root.appendChild(buildCombinedDay(date, { showHeader:false }));
+  root.appendChild(fhDayDash(date));
 }
 
 /* ==================== Calendar (3 day / week / month) ==================== */
@@ -8862,7 +8932,7 @@ function renderDayDetail(date){
   heading.textContent = date.toLocaleDateString(undefined,{ weekday:'long', day:'numeric', month:'long' });
   backBar.appendChild(heading);
   content.appendChild(backBar);
-  content.appendChild(buildCombinedDay(date, { showHeader:false }));
+  content.appendChild(fhDayDash(date));
 }
 
 function renderCalendarPage(){
@@ -10268,7 +10338,7 @@ function showAllSet(){
   });
 }
 
-const FH_APP_VERSION = '0.27 (test build)';
+const FH_APP_VERSION = '0.28 (test build)';
 function fhFeedbackNote(){
   const L=[]; const add=(k,v)=>L.push(k+': '+v);
   add('App', 'Family Hub '+FH_APP_VERSION);
@@ -11074,7 +11144,7 @@ if(FH_NEEDS_SETUP){
 </script>
 <script>
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
+  window.addEventListener("load", function(){ var had = !!navigator.serviceWorker.controller, done = false; navigator.serviceWorker.addEventListener("controllerchange", function(){ if(!had || done) return; done = true; location.reload(); }); navigator.serviceWorker.register("sw.js").then(function(reg){ document.addEventListener("visibilitychange", function(){ if(document.visibilityState === "visible") reg.update().catch(function(){}); }); setInterval(function(){ reg.update().catch(function(){}); }, 30 * 60 * 1000); }).catch(function(){}); });
 }
 </script>
 </body>
