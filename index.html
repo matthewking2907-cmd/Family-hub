@@ -2149,6 +2149,16 @@ body.kid-locked .fht-admin{ display:none !important; }
 .manage-body > .panel{ margin:0; }
 body.kid-locked #manageChores{ display:none !important; }
 
+/* ===== v27: Today/Tomorrow two-column layout keeps events + tasks on their own full-width row; kitchen cards ===== */
+.combined-day > .fhe-block, .combined-day > .fht-block{ grid-column:1 / -1; }
+.fht-krow{ display:flex; align-items:center; gap:12px; padding:6px 0; }
+.fht-ktxt{ display:flex; flex-direction:column; }
+.fht-ktxt b{ font-size:1.05em; }
+.fht-ktxt small{ font-size:.75em; color:var(--muted,#999); font-weight:700; }
+.fht-up{ display:flex; gap:12px; padding:5px 0; border-top:1px solid var(--panel-line,rgba(128,128,128,.25)); }
+.fht-up b{ flex:0 0 4.2em; }
+.fht-up span{ flex:1; min-width:0; overflow-wrap:anywhere; }
+
 </style>
 <script>/* ==================== THEME: colour palettes + light / dark / auto ==================== */
 /* Runs in <head> so the right colours are in place before the first paint. */
@@ -8521,7 +8531,33 @@ const FHTasks = (function(){
   }
   function kitchenCard(date){
     const list = forDay(date).filter(function(t){ return !t.done; }); if(!list.length) return null;
-    return h('div', { class:'fht-kit' }, h('b', { text:'Tasks due' }), list.map(function(t){ return h('div', { text:'☑ ' + t.title + (whoName(t.who) ? ' (' + whoName(t.who) + ')' : '') }); }));
+    const card = h('div', { class:'fhk-card' }, h('div', { class:'fhk-label', text:'Tasks due' }));
+    list.slice(0, 8).forEach(function(t){
+      const od = overdue(t);
+      card.appendChild(h('div', { class:'fht-krow', style:'--ec:' + colorOf(t.who) }, tick(t, true),
+        h('span', { class:'fht-ktxt' }, h('b', { text:t.title }), h('small', { text:[od ? 'Overdue' : (t.time ? timeLabel(t) : ''), whoName(t.who)].filter(Boolean).join(' · ') }))));
+    });
+    return card;
+  }
+  // next few days at a glance: events, imported calendar entries and dated tasks
+  function upcoming(from, days){
+    const out = [];
+    for(let i = 1; i <= days; i++){
+      const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + i);
+      let evs = []; try{ evs = FHEvents.forDay(d); }catch(e){}
+      const ts = forDay(d).filter(function(t){ return !t.done; });
+      if(evs.length || ts.length) out.push({ date:d, evs:evs, tasks:ts });
+    }
+    return out;
+  }
+  function kitchenUpcoming(from){
+    const items = upcoming(from, 7); if(!items.length) return null;
+    const card = h('div', { class:'fhk-card' }, h('div', { class:'fhk-label', text:'Coming up this week' }));
+    items.forEach(function(it){
+      const lines = it.evs.slice(0, 3).map(function(ev){ return ev.title || 'Busy'; }).concat(it.tasks.slice(0, 3).map(function(t){ return '☑ ' + t.title; }));
+      card.appendChild(h('div', { class:'fht-up' }, h('b', { text:it.date.toLocaleDateString(undefined, { weekday:'short', day:'numeric' }) }), h('span', { text:lines.join(' · ') })));
+    });
+    return card;
   }
 
   function field(label, el){ return h('div', { class:'fhe-field' }, h('span', { class:'fhe-lab', text:label }), el); }
@@ -8615,7 +8651,7 @@ const FHTasks = (function(){
     if(done.length && filter !== 'done') container.appendChild(h('div', { class:'fhes-foot' }, h('button', { type:'button', class:'btn secondary', text:'Clear ' + done.length + ' completed', onClick:function(){
       if(!confirm('Remove completed tasks from the list?')) return; save(load().filter(function(t){ return !t.done; })); render(container); } })));
   }
-  return { KEY:KEY, load:load, save:save, forDay:forDay, dayBlock:dayBlock, monthMarks:monthMarks, kitchenCard:kitchenCard, openEditor:openEditor, render:render, overdue:overdue, iso:iso };
+  return { KEY:KEY, load:load, save:save, forDay:forDay, dayBlock:dayBlock, monthMarks:monthMarks, kitchenCard:kitchenCard, kitchenUpcoming:kitchenUpcoming, openEditor:openEditor, render:render, overdue:overdue, iso:iso };
 })();
 
 // Builds (or removes, if already open) an inline meal-picker under a meal
@@ -8918,6 +8954,7 @@ function refreshCurrentPage(){ refreshPage(currentPage); }
 
 function showPage(pageId){
   currentPage = pageId;
+  try{ if(typeof FHSync !== 'undefined') FHSync.nudge(); }catch(e){}
   if(pageId==='chores' || pageId==='tasklists') fhSetChoresOpen(true);
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const target = document.getElementById('page-'+pageId);
@@ -10231,7 +10268,7 @@ function showAllSet(){
   });
 }
 
-const FH_APP_VERSION = '0.26 (test build)';
+const FH_APP_VERSION = '0.27 (test build)';
 function fhFeedbackNote(){
   const L=[]; const add=(k,v)=>L.push(k+': '+v);
   add('App', 'Family Hub '+FH_APP_VERSION);
@@ -10371,6 +10408,7 @@ const FHKitchen = (function(){
     const wrap = el.querySelector('.fhk-main'); wrap.innerHTML = '';
     const left = mk('div','fhk-col'), right = mk('div','fhk-col');
     const sc = shopCard(now); if(sc) left.appendChild(sc); { const ec = FHEvents.kitchenCard(now); if(ec) left.appendChild(ec); }
+    { const tc = FHTasks.kitchenCard(now); if(tc) left.appendChild(tc); }
     if(Feature.on('meals')){
       left.appendChild(mealCard(now));
       const tm = shAddDays(now, 1); let ti = null; try{ ti = MealApp.getDayDisplay(tm); }catch(e){}
@@ -10378,6 +10416,7 @@ const FHKitchen = (function(){
       next.appendChild(mk('div','fhk-nextm', ti && ti.mealName ? ti.mealName : 'Nothing planned'));
       left.appendChild(next);
     }
+    { const up = FHTasks.kitchenUpcoming(now); if(up) left.appendChild(up); }
     if(Feature.on('chores')){
       const c = mk('div','fhk-card'); c.appendChild(mk('div','fhk-label','Today’s chores'));
       c.appendChild(ChoreApp.buildDayBlock(now, { showHeader:false }));
@@ -10870,6 +10909,8 @@ const FHSync = (function(){
     }catch(e){ lastErr = e.offline ? 'Offline. Changes will sync when you are back online.' : (e.message || 'Sync problem.'); throw e; }
     finally{ busy = false; emit(); }
   }
+  let lastNudge = 0;
+  function nudge(){ if(!active() || busy || Date.now() - lastNudge < 8000) return; lastNudge = Date.now(); syncNow('poll').catch(function(){}); }
   function startTimers(){
     stopTimers();
     pollTimer = setInterval(function(){ if(document.visibilityState === 'visible' && navigator.onLine !== false) syncNow('poll').catch(function(){}); }, 30000);
@@ -10894,7 +10935,7 @@ const FHSync = (function(){
     return { mode:m, email: st.auth ? st.auth.email : '', household: st.hh, pending:p, last:st.last, busy:busy, error:lastErr, configured:!!config(), fromBuild:!!BUILD };
   }
 
-  return { init, summary, onChange, setConfig, sendCode, verify, createHousehold, joinHousehold, adoptHousehold,
+  return { init, summary, onChange, nudge, setConfig, sendCode, verify, createHousehold, joinHousehold, adoptHousehold,
            leaveHousehold, newCode, disconnect, syncNow, hasLocalSetup, refreshHousehold, rpc,
            _merge3: merge3, _eligible: eligible };
 })();
