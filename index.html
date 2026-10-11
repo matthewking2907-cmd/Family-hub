@@ -2103,6 +2103,52 @@ body.kid-locked .nav-item[data-page="essentials"]{ display:none !important; }
 .fh-setupbanner{margin:0 0 14px;border:2px solid var(--accent,#4a8);}
 .fh-setupbanner h3{margin:0 0 6px}
 
+/* ===== v25: Tasks, grouped menu, scrollable week ===== */
+.fht-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.fht-head .fhes-h{ margin:0; }
+.fht-quick{ margin:8px 0 10px; }
+.fht-filters{ margin:6px 0 10px; }
+.fht-row{ display:flex; align-items:center; gap:10px; background:var(--white,#fff); border:1px solid var(--panel-line,#ddd); border-left:4px solid var(--ec); border-radius:10px; padding:7px 10px; }
+.fht-row.full{ margin:0 0 7px; padding:9px 12px; }
+.fht-row.done .fht-title{ text-decoration:line-through; opacity:.6; }
+.fht-row.od{ background:#fdf0ee; }
+@media (prefers-color-scheme: dark){ .fht-row.od{ background:#3a2220; } }
+.fht-tick{ flex:0 0 auto; width:26px; height:26px; border-radius:8px; border:2px solid var(--ec); background:transparent; color:#fff; font:inherit; font-weight:800; font-size:.95rem; line-height:1; cursor:pointer; padding:0; }
+.fht-tick.big{ width:32px; height:32px; font-size:1.1rem; }
+.fht-tick.on{ background:var(--ec); }
+.fht-main{ flex:1 1 auto; min-width:0; text-align:left; background:transparent; border:0; color:inherit; font:inherit; padding:0; cursor:pointer; display:flex; flex-direction:column; gap:1px; }
+.fht-title{ font-size:.92rem; font-weight:700; overflow-wrap:anywhere; }
+.fht-row.full .fht-title{ font-size:1rem; }
+.fht-meta{ font-size:.72rem; font-weight:700; color:var(--muted,#777); }
+.fht-row.od .fht-meta{ color:#b3261e; }
+.fht-mark{ font-size:.6rem; font-weight:700; padding:1px 4px; border-radius:4px; border-left:3px solid var(--accent,#6C4F8A); background:var(--panel,#f0eef4); }
+.fht-kit{ font-size:1.05em; padding:4px 8px; margin-top:6px; }
+body.kid-locked .fht-admin{ display:none !important; }
+
+/* week + shop week scroll sideways on tablets (about four days visible), and fit all seven on big screens */
+.range-days{ display:flex !important; grid-template-columns:none !important; gap:12px; overflow-x:auto; overflow-y:visible; align-items:flex-start; padding-bottom:10px; scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; touch-action:pan-x pan-y; }
+.range-day-col{ flex:1 0 225px !important; min-width:225px; scroll-snap-align:start; }
+@media (max-width: 780px){ .range-day-col{ flex:0 0 78% !important; min-width:200px; } }
+
+/* grouped sidebar */
+.nav-label-grp{ font-size:.66rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:var(--muted,#777); padding:14px 10px 4px; white-space:nowrap; overflow:hidden; }
+.sidebar.collapsed .nav-label-grp{ display:none; }
+.nav-chev{ margin-left:auto; flex:0 0 auto; width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; border-radius:7px; font-size:.7rem; transition:transform .15s; }
+.nav-chev:hover{ background:rgba(128,128,128,.25); }
+.sidebar.chores-open .nav-chev{ transform:rotate(90deg); }
+.nav-item.nav-sub{ display:none; padding-left:34px; font-size:.84rem; }
+.sidebar.chores-open .nav-item.nav-sub{ display:flex; }
+.sidebar.collapsed .nav-chev{ display:none; }
+.fh-calview{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.nav-item.nav-sub{ padding-left:26px; gap:8px; font-size:.82rem; }
+.nav-item.nav-sub .nav-icon{ width:18px; }
+
+/* ===== v26: single Manage chores panel ===== */
+.manage-panel{ margin:10px 0 14px; }
+.manage-body{ display:flex; flex-direction:column; gap:8px; }
+.manage-body > .panel{ margin:0; }
+body.kid-locked #manageChores{ display:none !important; }
+
 </style>
 <script>/* ==================== THEME: colour palettes + light / dark / auto ==================== */
 /* Runs in <head> so the right colours are in place before the first paint. */
@@ -2166,14 +2212,19 @@ var FHTheme = (function(){
   <div class="drawer-backdrop" id="drawerBackdrop"></div>
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-head">Family Hub</div>
+    <div class="nav-label-grp">Family planner</div>
     <button class="nav-item active" data-page="today"><span class="nav-icon">☀️</span><span class="nav-label">Today</span></button>
     <button class="nav-item" data-page="tomorrow"><span class="nav-icon">⏭️</span><span class="nav-label">Tomorrow</span></button>
-    <button class="nav-item" data-page="mealplan"><span class="nav-icon">🍽️</span><span class="nav-label">Meal Plan</span></button>
-    <button class="nav-item" data-page="shopping"><span class="nav-icon">🛒</span><span class="nav-label">Shopping List</span></button>
-    <button class="nav-item" data-page="essentials"><span class="nav-icon">🧻</span><span class="nav-label">Essentials</span></button>
-    <button class="nav-item" data-page="chores"><span class="nav-icon">🧹</span><span class="nav-label">Chores</span></button>
-    <button class="nav-item" data-page="tasklists"><span class="nav-icon">📋</span><span class="nav-label">Task Lists</span></button>
     <button class="nav-item" data-page="calendar"><span class="nav-icon">🗓️</span><span class="nav-label">Calendar</span></button>
+    <div class="nav-label-grp">Meals &amp; shopping</div>
+    <button class="nav-item" data-page="mealplan"><span class="nav-icon">🍽️</span><span class="nav-label">Meal plan</span></button>
+    <button class="nav-item" data-page="shopping"><span class="nav-icon">🛒</span><span class="nav-label">Shopping list</span></button>
+    <button class="nav-item" data-page="essentials"><span class="nav-icon">🧻</span><span class="nav-label">Essentials</span></button>
+    <div class="nav-label-grp">Household</div>
+    <button class="nav-item" data-page="chores"><span class="nav-icon">🧹</span><span class="nav-label">Chores</span><span class="nav-chev" id="navChoresChev" role="button" tabindex="0" aria-label="Show or hide Upcoming chores" aria-expanded="false">▶</span></button>
+    <button class="nav-item nav-sub" data-page="tasklists"><span class="nav-icon">📋</span><span class="nav-label">Upcoming chores</span></button>
+    <button class="nav-item" data-page="tasks"><span class="nav-icon">☑️</span><span class="nav-label">Tasks</span></button>
+    <div class="nav-label-grp">App</div>
     <button class="nav-item" data-page="settings"><span class="nav-icon">⚙️</span><span class="nav-label">Settings</span></button>
     <div class="nav-spacer"></div>
     <button class="collapse-btn" id="collapseBtn">«</button>
@@ -2360,6 +2411,9 @@ var FHTheme = (function(){
     <button id="nextWeekBtn" aria-label="Next week">›</button>
   </div>
 
+  <details class="panel manage-panel" id="manageChores">
+    <summary>⚙️ Manage chores</summary>
+    <div class="panel-body manage-body">
   <details class="panel" id="peoplePanel">
     <summary>People</summary>
     <div class="panel-body">
@@ -2460,6 +2514,8 @@ var FHTheme = (function(){
       <button class="btn full" id="addMilestoneBtn">Add reward</button>
     </div>
   </details>
+    </div>
+  </details>
 
   <section class="calendar" id="calendar"></section>
 
@@ -2490,6 +2546,10 @@ var FHTheme = (function(){
 
     <section class="page" id="page-essentials">
       <div class="app"><div id="essentialsContent"></div></div>
+    </section>
+
+    <section class="page" id="page-tasks">
+      <div class="app"><div id="tasksContent"></div></div>
     </section>
 
     <section class="page" id="page-calendar">
@@ -7193,6 +7253,8 @@ function toggleCompletion(key, chore, resolvedAssignee){
   }
   if(next>0) completions[key] = next; else delete completions[key];
   saveKey(KEYS.completions, completions);
+  // remember when it was really ticked, so an early tick can be shown as "done early"
+  try{ const ca = JSON.parse(fhRawGet('chore-chart-completed-at-v1') || '{}'); if(next >= max) ca[key] = new Date().toISOString(); else delete ca[key]; fhSaveJSON('chore-chart-completed-at-v1', ca); }catch(e){}
 }
 function adjustStars(personId, delta){
   starsByPerson[personId] = Math.max(0, (starsByPerson[personId]||0) + delta);
@@ -7287,7 +7349,12 @@ function buildChoreItem(chore, key, occurrenceDate, opts){
   info.appendChild(nameLine);
   const as = document.createElement('span');
   as.className = 'cassignee';
-  as.textContent = assigneeLabel(resolvedAssignee) + (hasOverride ? ' · today only' : '') + (opts.dateLabel ? ' · ' + opts.dateLabel : '') + '  ✎';
+  let earlyTxt = '';
+  if(isDone && chore.freq !== 'monthly'){
+    try{ const at = (JSON.parse(fhRawGet('chore-chart-completed-at-v1') || '{}'))[key];
+      if(at){ const ad = new Date(at); ad.setHours(0,0,0,0); const od = new Date(occurrenceDate); od.setHours(0,0,0,0); if(ad < od) earlyTxt = ' · ✓ done early (' + ad.toLocaleDateString(undefined,{ weekday:'short', day:'numeric', month:'short' }) + ')'; } }catch(e){}
+  }
+  as.textContent = assigneeLabel(resolvedAssignee) + (hasOverride ? ' · today only' : '') + (opts.dateLabel ? ' · ' + opts.dateLabel : '') + earlyTxt + '  ✎';
   as.addEventListener('click', (e)=>{
     e.stopPropagation();
     openOverrideKey = (openOverrideKey===key) ? null : key;
@@ -8389,6 +8456,168 @@ const FHEss = (function(){
   return { KEY:KEY, catalog:catalog, groups:groups, defaults:defaults, load:load, save:save, mine:mine, render:render, openEditor:openEditor };
 })();
 
+/* One-off family tasks: add, assign to a person, optional due date (and time) that shows on the calendar.
+   Stored in one synced key as an array of {id,title,notes,who,due,time,done,created}. done = ISO timestamp when ticked. */
+const FHTasks = (function(){
+  const KEY = 'family-hub-tasks-v1';
+  let filter = 'all';
+  function load(){ try{ const v = JSON.parse(fhRawGet(KEY) || '[]'); return Array.isArray(v) ? v : []; }catch(e){ return []; } }
+  function save(list){ fhSaveJSON(KEY, list); }
+  function uid(){ return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+  function iso(d){ return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function parse(s){ const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
+  function people(){ try{ const v = JSON.parse(fhRawGet('chore-chart-people-v1') || '[]'); return Array.isArray(v) ? v : []; }catch(e){ return []; } }
+  function personOf(id){ return id ? people().find(function(p){ return p.id === id; }) : null; }
+  function colorOf(id){ const p = personOf(id); return p && p.hue != null ? 'hsl(' + p.hue + ',55%,48%)' : 'var(--accent,#6C4F8A)'; }
+  function whoName(id){ const p = personOf(id); return p ? p.name : ''; }
+  function on(){ try{ return Feature.on('tasks'); }catch(e){ return true; } }
+  // date-only tasks are overdue from the next day; timed ones once their time has passed
+  function overdue(t, now){
+    if(t.done || !t.due) return false; now = now || new Date();
+    if(t.time){ const d = parse(t.due); if(!d) return false; const p = t.time.split(':'); d.setHours(+p[0] || 0, +p[1] || 0, 0, 0); return d < now; }
+    return t.due < iso(now);
+  }
+  function setDone(id, yes){
+    const list = load(); const t = list.find(function(x){ return x.id === id; }); if(!t) return;
+    t.done = yes ? new Date().toISOString() : ''; save(list); refresh();
+  }
+  function refresh(){ try{ refreshCurrentPage(); }catch(e){} }
+  function timeLabel(t){ if(!t.time) return ''; const p = t.time.split(':'); const d = new Date(2000, 0, 1, +p[0], +p[1]); return d.toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' }); }
+  function dueLabel(t){
+    const d = parse(t.due); if(!d) return 'No date';
+    const today = iso(new Date()), tom = iso(new Date(Date.now() + 86400000));
+    const base = t.due === today ? 'Today' : t.due === tom ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday:'short', day:'numeric', month:'short' });
+    return base + (t.time ? ' ' + timeLabel(t) : '');
+  }
+
+  // tasks to show on a calendar day: due that day, plus (on today) anything overdue
+  function forDay(date){
+    if(!on()) return [];
+    const day = iso(date), isToday = day === iso(new Date());
+    return load().filter(function(t){ return t.due && (t.due === day || (isToday && !t.done && t.due < day)); })
+      .sort(function(a, b){ return (a.due === b.due ? 0 : a.due < b.due ? -1 : 1) || (a.time || '99').localeCompare(b.time || '99') || a.title.localeCompare(b.title); });
+  }
+  function tick(t, big){
+    return h('button', { type:'button', class:'fht-tick' + (t.done ? ' on' : '') + (big ? ' big' : ''), 'aria-label':(t.done ? 'Mark not done: ' : 'Mark done: ') + t.title, 'aria-pressed':t.done ? 'true' : 'false',
+      style:'--ec:' + colorOf(t.who), onClick:function(e){ e.stopPropagation(); setDone(t.id, !t.done); } }, t.done ? '✓' : '');
+  }
+  function dayBlock(date){
+    const list = forDay(date); const frag = document.createDocumentFragment(); if(!list.length) return frag;
+    const wrap = h('div', { class:'fhe-block fht-block' });
+    list.forEach(function(t){
+      const od = overdue(t);
+      wrap.appendChild(h('div', { class:'fht-row' + (t.done ? ' done' : '') + (od ? ' od' : ''), style:'--ec:' + colorOf(t.who) },
+        tick(t),
+        h('button', { type:'button', class:'fht-main', onClick:function(){ openEditor({ task:t }); } },
+          h('span', { class:'fht-title', text:'☑ ' + t.title }),
+          h('span', { class:'fht-meta', text:[od ? 'Overdue' : (t.time ? timeLabel(t) : 'Due'), whoName(t.who)].filter(Boolean).join(' · ') }))));
+    });
+    frag.appendChild(wrap); return frag;
+  }
+  function monthMarks(date){
+    const n = forDay(date).filter(function(t){ return !t.done; }).length; if(!n) return null;
+    return h('div', { class:'fht-mark', text:'☑ ' + n + (n === 1 ? ' task' : ' tasks') });
+  }
+  function kitchenCard(date){
+    const list = forDay(date).filter(function(t){ return !t.done; }); if(!list.length) return null;
+    return h('div', { class:'fht-kit' }, h('b', { text:'Tasks due' }), list.map(function(t){ return h('div', { text:'☑ ' + t.title + (whoName(t.who) ? ' (' + whoName(t.who) + ')' : '') }); }));
+  }
+
+  function field(label, el){ return h('div', { class:'fhe-field' }, h('span', { class:'fhe-lab', text:label }), el); }
+  function openEditor(o){
+    if(document.getElementById('fhTaskSheet')) return;
+    o = o || {}; const editing = !!(o.task && o.task.id);
+    const t = Object.assign({ id:uid(), title:'', notes:'', who:'', due:'', time:'', done:'', created:new Date().toISOString() }, o.task || {});
+    const close = function(){ const m = document.getElementById('fhTaskSheet'); if(m) m.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = function(e){ if(e.key === 'Escape') close(); };
+    const title = h('input', { type:'text', class:'fhe-in', maxlength:'100', placeholder:'e.g. Return parcel, Book dentist, School form', value:t.title, autocomplete:'off' });
+    const due = h('input', { type:'date', class:'fhe-in', value:t.due || '' });
+    const time = h('input', { type:'time', class:'fhe-in', value:t.time || '' });
+    const notes = h('textarea', { class:'fhe-in', rows:'2', maxlength:'300', placeholder:'Notes (optional)', value:t.notes || '' });
+    let who = t.who || '';
+    const chips = h('div', { class:'fhe-chips' });
+    const drawChips = function(){
+      chips.innerHTML = '';
+      [{ id:'', name:'Anyone' }].concat(people().filter(function(p){ return p.name; })).forEach(function(p){
+        chips.appendChild(h('button', { type:'button', class:'fhe-chip' + (p.id === who ? ' on' : ''), style:'--ec:' + colorOf(p.id), text:p.name, onClick:function(){ who = p.id; drawChips(); } }));
+      });
+    };
+    drawChips();
+    const timeField = field('Time (optional)', time);
+    const sync = function(){ timeField.style.display = due.value ? '' : 'none'; if(!due.value) time.value = ''; };
+    due.addEventListener('input', sync); due.addEventListener('change', sync); sync();
+    const quick = h('div', { class:'fhe-chips' }, [['Today', 0], ['Tomorrow', 1], ['Next week', 7]].map(function(q){
+      return h('button', { type:'button', class:'fhe-chip', style:'--ec:var(--accent,#6C4F8A)', text:q[0], onClick:function(){ due.value = iso(new Date(Date.now() + q[1] * 86400000)); sync(); } }); }));
+    const err = h('div', { class:'fhe-err' });
+    const saveBtn = h('button', { type:'button', class:'btn', text:'Save', onClick:function(){
+      const v = title.value.trim(); if(!v){ err.textContent = 'Give the task a name.'; title.focus(); return; }
+      const out = Object.assign({}, t, { title:v.slice(0, 100), notes:notes.value.trim().slice(0, 300), who:who, due:due.value || '', time:due.value ? (time.value || '') : '' });
+      const list = load(); const i = list.findIndex(function(x){ return x.id === out.id; });
+      if(i >= 0) list[i] = out; else list.push(out);
+      save(list); close(); refresh();
+    } });
+    const delBtn = editing ? h('button', { type:'button', class:'btn secondary', text:'Delete', onClick:function(){
+      if(!confirm('Delete “' + t.title + '”?')) return; save(load().filter(function(x){ return x.id !== t.id; })); close(); refresh(); } }) : null;
+    const m = h('div', { id:'fhTaskSheet', class:'fhm-back', onClick:function(e){ if(e.target === m) close(); } },
+      h('div', { class:'fhm-sheet', role:'dialog', 'aria-label':editing ? 'Edit task' : 'Add task' },
+        h('div', { class:'fhm-head' }, h('div', { class:'fhm-title', text:editing ? 'Edit task' : 'Add task' }), h('button', { type:'button', class:'fhm-x', 'aria-label':'Close', text:'✕', onClick:close })),
+        h('div', { class:'fhe-form' }, field('What needs doing', title), h('div', { class:'fhe-field' }, h('span', { class:'fhe-lab', text:'Who' }), chips),
+          field('Done by (optional)', due), quick, timeField, notes, err,
+          h('div', { class:'fhe-actions' }, saveBtn, h('button', { type:'button', class:'btn secondary', text:'Cancel', onClick:close }), delBtn))));
+    document.body.appendChild(m); document.addEventListener('keydown', onKey); if(!editing) title.focus();
+  }
+
+  function render(container){
+    container.innerHTML = '';
+    const all = load(), ppl = people().filter(function(p){ return p.name; });
+    if(filter !== 'all' && filter !== 'done' && !ppl.some(function(p){ return p.id === filter; })) filter = 'all';
+    container.appendChild(h('div', { class:'fht-head' }, h('h2', { class:'fhes-h', text:'Tasks' }),
+      h('button', { type:'button', class:'btn fht-admin', text:'＋ Add task', onClick:function(){ openEditor({}); } })));
+    container.appendChild(h('p', { class:'fhes-sub', text:'One-off jobs for the family. Give one a date and it shows on the calendar and on that day.' }));
+    const quickIn = h('input', { type:'text', class:'fhe-in', maxlength:'100', placeholder:'Quick add: type a task and press Enter', autocomplete:'off', 'aria-label':'Quick add a task' });
+    quickIn.addEventListener('keydown', function(e){
+      if(e.key !== 'Enter') return; e.preventDefault(); const v = quickIn.value.trim(); if(!v) return;
+      const list = load(); list.push({ id:uid(), title:v.slice(0, 100), notes:'', who:(filter !== 'all' && filter !== 'done') ? filter : '', due:'', time:'', done:'', created:new Date().toISOString() });
+      save(list); render(container);
+      const again = container.querySelector('.fht-quick input'); if(again) again.focus();
+    });
+    container.appendChild(h('div', { class:'fht-quick fht-admin' }, quickIn));
+    const chips = h('div', { class:'fhe-chips fht-filters' });
+    const chip = function(id, label, color){ chips.appendChild(h('button', { type:'button', class:'fhe-chip' + (filter === id ? ' on' : ''), style:'--ec:' + (color || 'var(--accent,#6C4F8A)'), text:label, onClick:function(){ filter = id; render(container); } })); };
+    chip('all', 'All'); ppl.forEach(function(p){ chip(p.id, p.name, colorOf(p.id)); }); chip('done', 'Completed');
+    container.appendChild(chips);
+    const mine = function(t){ return filter === 'all' || filter === 'done' || t.who === filter || !t.who; };
+    const open = all.filter(function(t){ return !t.done && mine(t); });
+    const done = all.filter(function(t){ return t.done && (filter === 'done' || filter === 'all' || t.who === filter); });
+    const row = function(t){
+      const od = overdue(t);
+      return h('div', { class:'fht-row full' + (t.done ? ' done' : '') + (od ? ' od' : ''), style:'--ec:' + colorOf(t.who) }, tick(t, true),
+        h('button', { type:'button', class:'fht-main', onClick:function(){ openEditor({ task:t }); } },
+          h('span', { class:'fht-title', text:t.title }),
+          h('span', { class:'fht-meta', text:[t.due ? (od ? 'Overdue · ' : '') + dueLabel(t) : '', whoName(t.who)].filter(Boolean).join(' · ') || 'No date' })));
+    };
+    if(filter !== 'done'){
+      const dated = open.filter(function(t){ return t.due; }).sort(function(a, b){ return (a.due + (a.time || '')).localeCompare(b.due + (b.time || '')); });
+      const undated = open.filter(function(t){ return !t.due; }).sort(function(a, b){ return String(a.created).localeCompare(String(b.created)); });
+      const od = dated.filter(function(t){ return overdue(t); }), upcoming = dated.filter(function(t){ return !overdue(t); });
+      const sec = function(label, list){ if(!list.length) return; container.appendChild(h('h3', { class:'freq-section-heading', text:label })); list.forEach(function(t){ container.appendChild(row(t)); }); };
+      sec('Overdue', od); sec('Coming up', upcoming); sec('No date', undated);
+      if(!open.length) container.appendChild(h('div', { class:'empty-note', text:'Nothing to do. Add a task above.' }));
+    }
+    if(filter === 'done' || (done.length && filter !== 'done')){
+      if(filter === 'done'){
+        done.sort(function(a, b){ return String(b.done).localeCompare(String(a.done)); });
+        container.appendChild(h('h3', { class:'freq-section-heading', text:'Completed' })); done.forEach(function(t){ container.appendChild(row(t)); });
+        if(!done.length) container.appendChild(h('div', { class:'empty-note', text:'Nothing completed yet.' }));
+      }
+    }
+    if(done.length && filter !== 'done') container.appendChild(h('div', { class:'fhes-foot' }, h('button', { type:'button', class:'btn secondary', text:'Clear ' + done.length + ' completed', onClick:function(){
+      if(!confirm('Remove completed tasks from the list?')) return; save(load().filter(function(t){ return !t.done; })); render(container); } })));
+  }
+  return { KEY:KEY, load:load, save:save, forDay:forDay, dayBlock:dayBlock, monthMarks:monthMarks, kitchenCard:kitchenCard, openEditor:openEditor, render:render, overdue:overdue, iso:iso };
+})();
+
 // Builds (or removes, if already open) an inline meal-picker under a meal
 // card — lets any day view (Today, Tomorrow, Calendar drill-in, or a range
 // column) swap that day's dinner without going to the Meal Plan tab.
@@ -8452,6 +8681,7 @@ function buildCombinedDay(date, opts){
   const wrap = document.createElement('div');
   wrap.className = 'combined-day';
   wrap.appendChild(FHEvents.dayBlock(date));
+  wrap.appendChild(FHTasks.dayBlock(date));
   if(Feature.on('meals')) wrap.appendChild(buildMealCard(date));
   if(Feature.on('chores')) wrap.appendChild(ChoreApp.buildDayBlock(date, opts));
   return wrap;
@@ -8546,7 +8776,7 @@ function buildMonthGrid(monthDate){
       choresEl.textContent = summary.done + '/' + summary.total + ' chores';
       cell.appendChild(choresEl);
     }
-    { const em = FHEvents.monthMarks(date); if(em) cell.appendChild(em); }
+    { const em = FHEvents.monthMarks(date); if(em) cell.appendChild(em); const tm = FHTasks.monthMarks(date); if(tm) cell.appendChild(tm); }
     cell.addEventListener('click', ()=> openDayDetail(date));
     grid.appendChild(cell);
   }
@@ -8575,6 +8805,7 @@ function buildRangeDayColumn(date){
   col.appendChild(head);
 
   col.appendChild(FHEvents.dayBlock(date));
+  col.appendChild(FHTasks.dayBlock(date));
   if(Feature.on('meals')) col.appendChild(buildMealCard(date));
   if(Feature.on('chores')) col.appendChild(ChoreApp.buildDayBlock(date, { showHeader:false }));
   return col;
@@ -8657,7 +8888,7 @@ document.getElementById('calTodayBtn').addEventListener('click', ()=>{
 });
 
 /* ==================== Nav / sidebar / drawer ==================== */
-const PAGE_TITLES = { today:'Today', tomorrow:'Tomorrow', mealplan:'Meal Plan', shopping:'Shopping List', chores:'Chores', tasklists:'Task Lists', calendar:'Calendar', essentials:'Essentials', settings:'Settings' };
+const PAGE_TITLES = { today:'Today', tomorrow:'Tomorrow', mealplan:'Meal Plan', shopping:'Shopping List', chores:'Chores', tasklists:'Upcoming chores', tasks:'Tasks', calendar:'Calendar', essentials:'Essentials', settings:'Settings' };
 let currentPage = 'today';
 
 function refreshPage(pageId){
@@ -8668,13 +8899,26 @@ function refreshPage(pageId){
   else if(pageId==='tasklists') ChoreApp.renderFrequencyPage(document.getElementById('taskListsContent'));
   else if(pageId==='shopping') MealApp.renderShoppingListPage(document.getElementById('shoppingListContent'));
   else if(pageId==='essentials') FHEss.render(document.getElementById('essentialsContent'));
+  else if(pageId==='tasks') FHTasks.render(document.getElementById('tasksContent'));
   // mealplan / chores refresh themselves via their own module's render()
   if(typeof fhSetupBanner === 'function') fhSetupBanner(pageId);
 }
+function fhSetChoresOpen(open){
+  const sb = document.getElementById('sidebar'); if(!sb) return;
+  sb.classList.toggle('chores-open', !!open);
+  const c = document.getElementById('navChoresChev'); if(c) c.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+(function(){
+  const c = document.getElementById('navChoresChev'); if(!c) return;
+  const flip = function(e){ e.stopPropagation(); e.preventDefault(); fhSetChoresOpen(!document.getElementById('sidebar').classList.contains('chores-open')); };
+  c.addEventListener('click', flip);
+  c.addEventListener('keydown', function(e){ if(e.key === 'Enter' || e.key === ' ') flip(e); });
+})();
 function refreshCurrentPage(){ refreshPage(currentPage); }
 
 function showPage(pageId){
   currentPage = pageId;
+  if(pageId==='chores' || pageId==='tasklists') fhSetChoresOpen(true);
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const target = document.getElementById('page-'+pageId);
   if(target) target.classList.add('active');
@@ -9102,7 +9346,8 @@ function obApply(S){
   fhSaveJSON('brick-bites-global-portions-v1', (F.meals && S.portionOn && S.portionG>0) ? Object.keys(portionNames).sort().map(n=>({name:n, qty:S.portionG, unit:'g'})) : []);
 
   if(F.meals && F.shopping && F.essentials){ FHEss.save({ ids: S.essIds || FHEss.defaults(S.pets), custom: S.essCustom || [] }); }
-  Feature.markSetUp({ chores:!!F.chores, meals:!!F.meals, shopping:!!(F.meals && F.shopping), essentials:!!(F.meals && F.shopping && F.essentials), rewards:!!(F.chores && F.rewards) });
+  Feature.markSetUp({ chores:!!F.chores, meals:!!F.meals, shopping:!!(F.meals && F.shopping), essentials:!!(F.meals && F.shopping && F.essentials), tasks:F.tasks !== false, rewards:!!(F.chores && F.rewards) });
+  try{ fhRawSet('family-hub-calview-v1', (S.calView === 'shopweek' && !(F.meals && F.shopping)) ? 'week' : (S.calView || 'week')); }catch(e){}
   fhRawRemove(FH_DRAFT_KEY);
   try{ sessionStorage.setItem(FH_JUST_KEY, '1'); }catch(e){}
   location.reload();
@@ -9167,7 +9412,7 @@ const OBW = (function(){
   function freshState(){
     return {
       v:2, step:'welcome',
-      features:{ chores:true, meals:true, shopping:true, rewards:true, essentials:true }, essIds:null, essCustom:[],
+      features:{ chores:true, meals:true, shopping:true, rewards:true, essentials:true, tasks:true }, calView:'week', essIds:null, essCustom:[],
       people:[
         { id:'t1', name:'', role:'parent', age:null, hue:OB_PERSON_HUES[0] },
         { id:'t2', name:'', role:'parent', age:null, hue:OB_PERSON_HUES[1] },
@@ -9336,7 +9581,11 @@ const OBW = (function(){
       row('rewards','⭐','Rewards','Stars (or anything you like) earned for chores, with prizes at milestones.', !F.chores, !F.chores?'Needs the chore chart':''),
       row('meals','🍽️','Meal planner','A 4-week rolling plan with a library of family meals.'),
       row('shopping','🛒','Shopping list','Built automatically from your meal plan, scaled to your household.', !F.meals, !F.meals?'Needs the meal planner':''),
-      row('essentials','🧻','Household essentials','Tap when you run low on toilet roll, bin bags and the like. It goes on your next shop.', !(F.meals && F.shopping), !(F.meals && F.shopping)?'Needs the shopping list':'')
+      row('essentials','🧻','Household essentials','Tap when you run low on toilet roll, bin bags and the like. It goes on your next shop.', !(F.meals && F.shopping), !(F.meals && F.shopping)?'Needs the shopping list':''),
+      row('tasks','☑️','Tasks','One-off jobs like “return parcel”, with who and by when. Dated tasks show on the calendar.'),
+      h('p',{class:'ob-label',text:'When you open the calendar, show'}),
+      h('div',{class:'ob-chips'}, [['3day','3 day'],['shopweek','Shop week'],['week','Week'],['month','Month']].filter(o=>o[0]!=='shopweek' || (F.meals && F.shopping)).map(o=>chip(o[1], (S.calView||'week')===o[0], ()=>{ S.calView=o[0]; render(); }))),
+      h('p',{class:'ob-hint',text:'You can change this any time in Settings, per device.'})
     ];
   }
   function stepPeople(){
@@ -9828,7 +10077,7 @@ const OBW = (function(){
 
 /* ==================== SETUP: feature gating, settings page, all-set summary ==================== */
 function applyFeatureGating(){
-  const gate = { mealplan:'meals', shopping:'shopping', essentials:'essentials', chores:'chores', tasklists:'chores' };
+  const gate = { mealplan:'meals', shopping:'shopping', essentials:'essentials', chores:'chores', tasklists:'chores', tasks:'tasks' };
   Object.keys(gate).forEach(page=>{
     const btn = document.querySelector('.nav-item[data-page="'+page+'"]');
     if(btn) btn.style.display = Feature.on(gate[page]) ? '' : 'none';
@@ -9839,7 +10088,13 @@ function applyFeatureGating(){
   document.body.classList.toggle('rewards-off', !(Feature.on('chores') && Feature.on('rewards')));
   document.body.classList.toggle('chores-off', !Feature.on('chores'));
   document.body.classList.toggle('meals-off', !Feature.on('meals'));
-  const hidden = { mealplan:!Feature.on('meals'), shopping:!Feature.on('shopping'), essentials:!Feature.on('essentials'), chores:!Feature.on('chores'), tasklists:!Feature.on('chores') };
+  const hidden = { mealplan:!Feature.on('meals'), shopping:!Feature.on('shopping'), essentials:!Feature.on('essentials'), chores:!Feature.on('chores'), tasklists:!Feature.on('chores'), tasks:!Feature.on('tasks') };
+  // hide a menu heading when everything under it is hidden
+  document.querySelectorAll('#sidebar .nav-label-grp').forEach(function(lab){
+    let any = false, n = lab.nextElementSibling;
+    while(n && !n.classList.contains('nav-label-grp') && !n.classList.contains('nav-spacer')){ if(n.classList.contains('nav-item') && !n.classList.contains('nav-sub') && n.style.display !== 'none') any = true; n = n.nextElementSibling; }
+    lab.style.display = any ? '' : 'none';
+  });
   if(typeof currentPage !== 'undefined' && hidden[currentPage]) showPage('today');
 }
 
@@ -9888,10 +10143,11 @@ function renderSettingsPage(){
     h('input',{type:'checkbox',checked:disabled?false:F.on(key),disabled:!!disabled,onChange:e=>{ F.set(key,e.target.checked); applyFeatureGating(); renderSettingsPage(); if(e.target.checked && (key==='chores' || key==='meals') && F.needsSetup(key)) OBW.open('addon:'+key); }}));
   root.appendChild(h('div',{class:'st-card'},
     h('h3',{text:'Features'}),
-    toggle('chores','🧹','Chore chart','Chores, task lists and calendar chores'),
+    toggle('chores','🧹','Chore chart','Chores, upcoming chores and calendar chores'),
     toggle('rewards','⭐','Rewards','Stars and prizes', !F.on('chores')),
     toggle('meals','🍽️','Meal planner','Meal plan and calendar meals'),
     toggle('shopping','🛒','Shopping list','Needs the meal planner', !F.on('meals')),
+    toggle('tasks','☑️','Tasks','One-off jobs with a person and a due date, shown on the calendar'),
     toggle('essentials','🧻','Household essentials','Tap what is running low and it goes on your next shop. Needs the shopping list', !F.on('shopping')),
     h('p',{class:'ob-hint',text:'Turning something off only hides it — your data is kept and comes back if you turn it on again.'})));
   const th = FHTheme.get();
@@ -9905,6 +10161,7 @@ function renderSettingsPage(){
     h('p',{class:'ob-label',text:'Colour'}), swatches,
     h('p',{class:'ob-label',text:'Mode'}),
     h('div',{class:'ob-chips'}, modeChip('Light','light'), modeChip('Dark','dark'), modeChip('Auto (follow device)','auto'))));
+  root.appendChild(fhCalViewCard(rr));
   root.appendChild(FHLock.settingsCard(rr));
   const lp = FHLocale.get();
   const setLoc = p=>{ FHLocale.set(p); try{ MealApp.relocalise(); FHLocale.applyRecipes(); }catch(e){} renderSettingsPage(); try{ MealApp.render(); }catch(e){} try{ refreshCurrentPage(); }catch(e){} };
@@ -9974,7 +10231,7 @@ function showAllSet(){
   });
 }
 
-const FH_APP_VERSION = '0.24 (test build)';
+const FH_APP_VERSION = '0.26 (test build)';
 function fhFeedbackNote(){
   const L=[]; const add=(k,v)=>L.push(k+': '+v);
   add('App', 'Family Hub '+FH_APP_VERSION);
@@ -10018,6 +10275,23 @@ function fhSetupBanner(pageId){
     h('p', { class:'ob-sub', text: feat === 'chores' ? 'Pick your rooms and we will suggest a starter set of chores for your family. Nothing else in your hub changes.' : 'Choose your meals, cooking nights and shopping details. Nothing else in your hub changes.' }),
     h('button', { type:'button', class:'ob-btn primary', text:'Start setup', onClick:()=>OBW.open('addon:' + feat) }));
   sec.insertBefore(box, sec.firstChild);
+}
+
+// Which calendar view opens first. Per device (a tablet in the kitchen can differ from a phone).
+const FH_CAL_VIEWS = [['3day','3 day'],['shopweek','Shop week'],['week','Week'],['month','Month']];
+function fhCalDefault(){
+  let v = ''; try{ v = fhRawGet('family-hub-calview-v1') || ''; }catch(e){}
+  if(!FH_CAL_VIEWS.some(o=>o[0]===v)) v = 'week';
+  if(v === 'shopweek' && !Feature.on('shopping')) v = 'week';
+  return v;
+}
+function fhApplyDefaultCalView(){ try{ setCalendarMode(fhCalDefault()); }catch(e){} }
+function fhCalViewCard(rr){
+  const cur = fhCalDefault();
+  return h('div',{class:'st-card',id:'stCalView'}, h('h3',{text:'Calendar'}),
+    h('p',{class:'ob-label',text:'Opens as'}),
+    h('div',{class:'ob-chips'}, FH_CAL_VIEWS.filter(o=>o[0]!=='shopweek' || Feature.on('shopping')).map(o=>h('button',{type:'button',class:'ob-chip'+(cur===o[0]?' on':''),'data-cv':o[0],text:o[1],onClick:()=>{ try{ fhRawSet('family-hub-calview-v1', o[0]); }catch(e){} rr(); }}))),
+    h('p',{class:'ob-hint',text:'Saved on this device only, so a kitchen tablet and a phone can differ.'}));
 }
 
 /* ==================== KITCHEN DISPLAY (tablet / wall screen) ==================== */
@@ -10347,7 +10621,7 @@ const FHSync = (function(){
   const ST_KEY  = 'fhsync:state';     // sign-in + sync bookkeeping; never exported in backups, never synced
   const BUILD = (typeof FH_SYNC_BUILD !== 'undefined' && FH_SYNC_BUILD && FH_SYNC_BUILD.url) ? FH_SYNC_BUILD : null;
   const SHARED_EXACT = { 'family-hub-config-v1':1, 'family-hub-locale-v1':1, 'family-hub-meal-rules-v1':1,
-                         'family-hub-hidden-meals-v1':1, 'family-hub-scratch-v1':1, 'family-hub-starter-chores-v1':1, 'family-hub-starter-plan-v1':1, 'family-hub-events-v1':1 };
+                         'family-hub-hidden-meals-v1':1, 'family-hub-scratch-v1':1, 'family-hub-starter-chores-v1':1, 'family-hub-starter-plan-v1':1, 'family-hub-events-v1':1, 'family-hub-tasks-v1':1 };
   // Per-device settings (parent PIN, theme, kitchen display, running timers, setup draft) are deliberately NOT shared.
   function eligible(k){ return !!SHARED_EXACT[k] || k.indexOf('brick-bites-') === 0 || k.indexOf('chore-chart-') === 0; }
 
@@ -10745,6 +11019,7 @@ applyFeatureGating();
   const d = host.closest('details');
   if(d) d.addEventListener('toggle', function(){ if(d.open) w.setServes(MealApp.getHouseholdSize()); });
 })();
+fhApplyDefaultCalView();
 showPage('today');
 if(FH_NEEDS_SETUP){
   OBW.open('setup');
