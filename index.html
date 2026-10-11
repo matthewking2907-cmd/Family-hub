@@ -2161,6 +2161,9 @@ body.kid-locked #manageChores{ display:none !important; }
 
 /* ===== v28: day dashboard (Today, Tomorrow, calendar day) ===== */
 .fhd{ display:flex; flex-direction:column; gap:18px; }
+.fhd-filter-wrap{ display:flex; flex-direction:column; gap:6px; }
+.fhd-filter .fhe-chip{ font-size:0.85rem; padding:6px 12px; }
+.fhd-filter-note{ font-size:0.8rem; color:var(--muted,#777); }
 .fhd-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 8px; min-height:32px; }
 .fhd-title{ font-size:.74rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:var(--muted,#777); }
 .fhd-acts{ display:flex; gap:8px; }
@@ -7447,6 +7450,10 @@ function buildDayBlock(date, opts){
     if(c.freq==='weekly') return c.weekday===dayIdx;
     if(c.freq==='fortnightly') return c.weekday===dayIdx && (c.parity||'A')===parity;
     return false;
+  }).filter(c=>{
+    if(!opts.person) return true;
+    const who = resolveAssigneeForKey(c, date, c.id + '::' + iso);
+    return who === opts.person || who === 'anyone' || !personById(who);
   });
 
   if(!applicable.length){
@@ -8157,7 +8164,7 @@ const FHCal = (function(){
         let hit = false, allDay = !!o.a;
         if(o.a) hit = dn >= o.sd && dn < o.ed; else hit = o.s < de && (o.e > ds || (o.e === o.s && o.s >= ds));
         if(!hit) return;
-        out.push({ id:'cal:' + f.id + ':' + (o.a ? o.sd : o.s), ro:true, title:o.t || 'Busy', location:o.l || '', allDay:allDay, start:allDay ? '' : hm(Math.max(o.s, ds)), end:allDay ? '' : (o.e > o.s && o.e <= de ? hm(o.e) : ''), who:name, color:color });
+        out.push({ id:'cal:' + f.id + ':' + (o.a ? o.sd : o.s), ro:true, title:o.t || 'Busy', location:o.l || '', allDay:allDay, start:allDay ? '' : hm(Math.max(o.s, ds)), end:allDay ? '' : (o.e > o.s && o.e <= de ? hm(o.e) : ''), who:name, pid:f.who || '', color:color });
       });
     });
     return out;
@@ -8276,17 +8283,23 @@ const FHEvents = (function(){
   }
   function timeText(ev){ return ev.allDay ? 'All day' : (ev.start || '') + (ev.end ? '–' + ev.end : ''); }
   function sortKey(ev){ return ev.allDay ? '00:00' : (ev.start || '99:99'); }
-  function forDay(date){
-    const own = load().filter(function(ev){ return occursOn(ev, date); });
+  /* is this event for that person? (no person = show everything; Everyone events and unassigned calendars show for all) */
+  function isFor(ev, person){
+    if(!person) return true;
+    if(ev.ro) return !ev.pid || ev.pid === person;
+    const ids = whoIds(ev.who); return !ids.length || ids.indexOf(person) >= 0;
+  }
+  function forDay(date, person){
+    const own = load().filter(function(ev){ return occursOn(ev, date) && isFor(ev, person); });
     let all = own;
-    if(typeof FHCal !== 'undefined' && FHCal.forDay){ all = own.concat(FHCal.forDay(date)); }
+    if(typeof FHCal !== 'undefined' && FHCal.forDay){ all = own.concat(FHCal.forDay(date).filter(function(ev){ return isFor(ev, person); })); }
     return all.sort(function(a, b){ return (a.allDay ? 0 : 1) - (b.allDay ? 0 : 1) || sortKey(a).localeCompare(sortKey(b)) || String(a.title).localeCompare(String(b.title)); });
   }
   function refresh(){ try{ refreshCurrentPage(); }catch(e){} }
 
   function dayBlock(date, opts){
     opts = opts || {};
-    const list = forDay(date);
+    const list = forDay(date, opts.person);
     const wrap = h('div', { class:'fhe-block' });
     list.forEach(function(ev){
       const row = h('button', { type:'button', class:'fhe-ev' + (ev.ro ? ' ro' : ''), style:'--ec:' + (ev.ro ? ev.color : colorOf(ev.who)), onClick:function(){ ev.ro ? openInfo(ev) : openEditor({ ev:ev, date:date }); } },
@@ -8389,7 +8402,7 @@ const FHEvents = (function(){
         h('div', { class:'fhe-form' }, ev.location ? h('div', { text:'📍 ' + ev.location }) : null, h('div', { class:'fhm-sub', text:'Imported from a connected calendar. Edit it there.' }))));
     document.body.appendChild(m);
   }
-  return { KEY:KEY, load:load, save:save, forDay:forDay, dayBlock:dayBlock, monthMarks:monthMarks, kitchenCard:kitchenCard, openEditor:openEditor, colorOf:colorOf, iso:iso, occursOn:occursOn };
+  return { KEY:KEY, load:load, save:save, forDay:forDay, isFor:isFor, dayBlock:dayBlock, monthMarks:monthMarks, kitchenCard:kitchenCard, openEditor:openEditor, colorOf:colorOf, iso:iso, occursOn:occursOn };
 })();
 
 /* Household essentials: tap "running low" and it goes on the next shop, and stays there until ticked off.
@@ -8551,8 +8564,10 @@ const FHTasks = (function(){
     return h('button', { type:'button', class:'fht-tick' + (t.done ? ' on' : '') + (big ? ' big' : ''), 'aria-label':(t.done ? 'Mark not done: ' : 'Mark done: ') + t.title, 'aria-pressed':t.done ? 'true' : 'false',
       style:'--ec:' + colorOf(t.who), onClick:function(e){ e.stopPropagation(); setDone(t.id, !t.done); } }, t.done ? '✓' : '');
   }
-  function dayBlock(date){
-    const list = forDay(date); const frag = document.createDocumentFragment(); if(!list.length) return frag;
+  function isFor(t, person){ return !person || !t.who || t.who === person; }
+  function dayBlock(date, opts){
+    const person = opts && opts.person;
+    const list = forDay(date).filter(function(t){ return isFor(t, person); }); const frag = document.createDocumentFragment(); if(!list.length) return frag;
     const wrap = h('div', { class:'fhe-block fht-block' });
     list.forEach(function(t){
       const od = overdue(t);
@@ -8690,22 +8705,39 @@ const FHTasks = (function(){
     if(done.length && filter !== 'done') container.appendChild(h('div', { class:'fhes-foot' }, h('button', { type:'button', class:'btn secondary', text:'Clear ' + done.length + ' completed', onClick:function(){
       if(!confirm('Remove completed tasks from the list?')) return; save(load().filter(function(t){ return !t.done; })); render(container); } })));
   }
-  return { KEY:KEY, load:load, save:save, forDay:forDay, dayBlock:dayBlock, monthMarks:monthMarks, kitchenCard:kitchenCard, kitchenUpcoming:kitchenUpcoming, openEditor:openEditor, render:render, overdue:overdue, iso:iso };
+  return { KEY:KEY, load:load, save:save, forDay:forDay, isFor:isFor, dayBlock:dayBlock, monthMarks:monthMarks, kitchenCard:kitchenCard, kitchenUpcoming:kitchenUpcoming, openEditor:openEditor, render:render, overdue:overdue, iso:iso };
 })();
 
-/* Today / Tomorrow (and a calendar day) as three tidy sections: Plans (events + tasks), Dinner (with ingredients), Chores. */
+/* Today / Tomorrow (and a calendar day) as three tidy sections: Plans (events + tasks), Dinner (with ingredients), Chores.
+   A row of name chips narrows Plans and Chores to one person (plus things for everyone). The choice is per device. */
+const FH_DASH_PERSON_KEY = 'family-hub-dash-person';
+function fhDashPeople(){ try{ const v = JSON.parse(fhRawGet('chore-chart-people-v1') || '[]'); return Array.isArray(v) ? v.filter(function(p){ return p && p.name; }) : []; }catch(e){ return []; } }
+function fhDashPerson(){ const id = fhRawGet(FH_DASH_PERSON_KEY) || ''; return fhDashPeople().some(function(p){ return p.id === id; }) ? id : ''; }
+function fhDashFilter(person){
+  const ps = fhDashPeople(); if(ps.length < 2) return null;
+  const pick = function(id){ fhRawSet(FH_DASH_PERSON_KEY, id); try{ refreshCurrentPage(); }catch(e){} };
+  const chip = function(id, name, color){ const on = id === person;
+    return h('button', { type:'button', class:'fhe-chip' + (on ? ' on' : ''), 'aria-pressed':on ? 'true' : 'false', style:'--ec:' + color, text:name, onClick:function(){ pick(on ? '' : id); } }); };
+  const row = h('div', { class:'fhe-chips fhd-filter', role:'group', 'aria-label':'Show plans and chores for' },
+    chip('', 'Everyone', 'var(--accent,#6C4F8A)'),
+    ps.map(function(p){ return chip(p.id, p.name, p.hue != null ? 'hsl(' + p.hue + ',55%,48%)' : 'var(--accent,#6C4F8A)'); }));
+  const who = ps.find(function(p){ return p.id === person; });
+  return h('div', { class:'fhd-filter-wrap' }, row, who ? h('div', { class:'fhd-filter-note', text:'Just ' + who.name + '’s plans and chores, plus things for everyone.' }) : null);
+}
 function fhDayDash(date){
   const wrap = h('div', { class:'fhd' });
   const iso = FHEvents.iso(date);
+  const person = fhDashPerson();
+  const filter = fhDashFilter(person); if(filter) wrap.appendChild(filter);
   // ---- plans
-  const evs = FHEvents.forDay(date), tks = Feature.on('tasks') ? FHTasks.forDay(date) : [];
+  const evs = FHEvents.forDay(date, person), tks = Feature.on('tasks') ? FHTasks.forDay(date).filter(function(t){ return FHTasks.isFor(t, person); }) : [];
   const acts = h('div', { class:'fhd-acts fht-admin' },
     h('button', { type:'button', class:'fhe-add', text:'＋ Event', onClick:function(){ FHEvents.openEditor({ date:date }); } }),
     Feature.on('tasks') ? h('button', { type:'button', class:'fhe-add', text:'＋ Task', onClick:function(){ FHTasks.openEditor({ task:{ due:iso } }); } }) : null);
   const body = h('div', { class:'fhd-plans' });
-  if(evs.length) body.appendChild(FHEvents.dayBlock(date, { add:false }));
-  if(tks.length) body.appendChild(FHTasks.dayBlock(date));
-  if(!evs.length && !tks.length) body.appendChild(h('div', { class:'fhd-empty', text:'Nothing planned.' }));
+  if(evs.length) body.appendChild(FHEvents.dayBlock(date, { add:false, person:person }));
+  if(tks.length) body.appendChild(FHTasks.dayBlock(date, { person:person }));
+  if(!evs.length && !tks.length) body.appendChild(h('div', { class:'fhd-empty', text:person ? 'Nothing planned for ' + fhDashPeople().find(function(p){ return p.id === person; }).name + '.' : 'Nothing planned.' }));
   const n = evs.length + tks.filter(function(t){ return !t.done; }).length;
   wrap.appendChild(h('section', { class:'fhd-sec fhd-plans-sec' },
     h('div', { class:'fhd-head' }, h('span', { class:'fhd-title', text:'Plans' + (n ? ' · ' + n : '') }), acts), body));
@@ -8727,7 +8759,7 @@ function fhDayDash(date){
   // ---- chores
   if(Feature.on('chores')){
     wrap.appendChild(h('section', { class:'fhd-sec fhd-chores' }, h('div', { class:'fhd-head' }, h('span', { class:'fhd-title', text:'Chores' })),
-      ChoreApp.buildDayBlock(date, { showHeader:false })));
+      ChoreApp.buildDayBlock(date, { showHeader:false, person:person })));
   }
   return wrap;
 }
