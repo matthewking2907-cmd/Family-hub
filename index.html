@@ -2218,6 +2218,17 @@ body.kid-locked #manageChores{ display:none !important; }
 .fhnudge-quick .fhe-chip{font-size:.85rem;padding:6px 11px;}
 .fhd-acts{flex-wrap:wrap;justify-content:flex-end;}
 
+/* Today/Tomorrow day swiping */
+.fhday-head{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+.fhday-title{flex:1;min-width:0;margin:0;}
+.fhday-arrow{flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:1px solid var(--panel-line,#ddd);background:var(--white,#fff);color:inherit;font-size:1.3rem;line-height:1;cursor:pointer;}
+.fhday-today{flex:0 0 auto;font:inherit;font-size:.8rem;font-weight:800;padding:6px 11px;border-radius:999px;border:0;background:var(--accent,#6C4F8A);color:#fff;cursor:pointer;white-space:nowrap;}
+.fhday-in-next{animation:fhdayNext .22s ease-out;}
+.fhday-in-prev{animation:fhdayPrev .22s ease-out;}
+@keyframes fhdayNext{from{opacity:.3;transform:translateX(28px);}to{opacity:1;transform:none;}}
+@keyframes fhdayPrev{from{opacity:.3;transform:translateX(-28px);}to{opacity:1;transform:none;}}
+@media (prefers-reduced-motion: reduce){.fhday-in-next,.fhday-in-prev{animation:none;}}
+
 </style>
 <script>/* ==================== THEME: colour palettes + light / dark / auto ==================== */
 /* Runs in <head> so the right colours are in place before the first paint. */
@@ -8007,6 +8018,8 @@ const FHExtras = (function(){
     save(list);
   }
   function nextShopLabel(){ return dlabel(upcomingAnchor()); }
+  function nextShopDate(){ return upcomingAnchor(); }
+  function essLowNames(){ return load().filter(function(x){ return x.scope === 'carry' && x.ess && !Object.keys(x.doneIn || {}).length; }).map(function(x){ return x.name; }); }
   function isDone(x, cyc){ return !!(x.doneIn && x.doneIn[cyc]); }
   function count(cyc){ return mine(cyc).length; }
   function add(text, section, scope, cyc){
@@ -8088,7 +8101,7 @@ const FHExtras = (function(){
           save(load().filter(function(y){ return y.id !== it.id; })); rerender(); } }));
     });
   }
-  return { essLow:essLow, essLowCount:essLowCount, setEssLow:setEssLow, nextShopLabel:nextShopLabel, ck:ck, load:load, add:add, block:block, rows:rows, count:count, KEY:KEY };
+  return { essLow:essLow, essLowCount:essLowCount, essLowNames:essLowNames, nextShopDate:nextShopDate, setEssLow:setEssLow, nextShopLabel:nextShopLabel, ck:ck, load:load, add:add, block:block, rows:rows, count:count, KEY:KEY };
 })();
 
 /* Imported calendars (Google / Outlook / iCloud "secret iCal link"). Read-only.
@@ -8881,7 +8894,11 @@ const FHTasks = (function(){
    A row of name chips narrows Plans and Chores to one person (plus things for everyone). The choice is per device. */
 const FH_DASH_PERSON_KEY = 'family-hub-dash-person';
 function fhDashPeople(){ try{ const v = JSON.parse(fhRawGet('chore-chart-people-v1') || '[]'); return Array.isArray(v) ? v.filter(function(p){ return p && p.name; }) : []; }catch(e){ return []; } }
-function fhDashPerson(){ const id = fhRawGet(FH_DASH_PERSON_KEY) || ''; return fhDashPeople().some(function(p){ return p.id === id; }) ? id : ''; }
+function fhDashPerson(){
+  let id = fhRawGet(FH_DASH_PERSON_KEY);
+  if(id === null){ try{ id = FHPush.prefs().person || ''; }catch(e){ id = ''; } }   // nothing picked here yet: start on whose device this is
+  return fhDashPeople().some(function(p){ return p.id === id; }) ? id : '';
+}
 function fhDashFilter(person){
   const ps = fhDashPeople(); if(ps.length < 2) return null;
   const pick = function(id){ fhRawSet(FH_DASH_PERSON_KEY, id); try{ refreshCurrentPage(); }catch(e){} };
@@ -8957,6 +8974,40 @@ function fhDayDash(date){
   return wrap;
 }
 
+/* Today and Tomorrow pages: swipe left/right (or the ‹ › buttons) to move through the days, as far as you like.
+   A Today pill jumps back. How far each page has been moved is kept while the app is open. */
+const FH_DAY_SHIFT = { today:0, tomorrow:0 };
+function fhDayPage(root, page, base){
+  const shift = FH_DAY_SHIFT[page] || 0, n = base + shift;
+  const now = new Date(), date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + n);
+  const rel = n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : n === -1 ? 'Yesterday' : '';
+  const go = function(d){ FH_DAY_SHIFT[page] = shift + d; root.dataset.slide = d > 0 ? 'next' : 'prev'; fhDayPage(root, page, base); };
+  const home = function(){ FH_DAY_SHIFT.today = 0; FH_DAY_SHIFT.tomorrow = 0; if(page === 'today') fhDayPage(root, page, base); else showPage('today'); };
+  root.innerHTML = '';
+  root.appendChild(h('div', { class:'fhday-head' },
+    h('button', { type:'button', class:'fhday-arrow', 'aria-label':'Previous day', text:'‹', onClick:function(){ go(-1); } }),
+    h('div', { class:'dash-heading fhday-title', text:(rel ? rel + ' — ' : '') + date.toLocaleDateString(undefined, { weekday:'long', day:'numeric', month:'long' }) }),
+    n !== 0 ? h('button', { type:'button', class:'fhday-today', text:'↩ Today', onClick:home }) : null,
+    h('button', { type:'button', class:'fhday-arrow', 'aria-label':'Next day', text:'›', onClick:function(){ go(1); } })));
+  const dash = fhDayDash(date);
+  if(root.dataset.slide){ dash.classList.add('fhday-in-' + root.dataset.slide); delete root.dataset.slide; }
+  root.appendChild(dash);
+  if(!root.__fhSwipe){
+    root.__fhSwipe = true;
+    let x0 = null, y0 = 0;
+    root.addEventListener('touchstart', function(e){
+      const t = e.target;
+      if(e.touches.length !== 1 || (t.closest && t.closest('input,textarea,select,.fhm-back,[data-noswipe]'))){ x0 = null; return; }
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+    }, { passive:true });
+    root.addEventListener('touchend', function(e){
+      if(x0 === null) return;
+      const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+      if(Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5){ const b = root.querySelector('.fhday-arrow' + (dx < 0 ? ':last-of-type' : '')); if(b) b.click(); }
+    }, { passive:true });
+  }
+}
+
 // Builds (or removes, if already open) an inline meal-picker under a meal
 // card — lets any day view (Today, Tomorrow, Calendar drill-in, or a range
 // column) swap that day's dinner without going to the Meal Plan tab.
@@ -9030,24 +9081,12 @@ function buildCombinedDay(date, opts){
 function renderTodayPage(){
   const root = document.getElementById('todayContent');
   if(!root) return;
-  root.innerHTML = '';
-  const date = new Date();
-  const h = document.createElement('div');
-  h.className = 'dash-heading';
-  h.textContent = 'Today — ' + date.toLocaleDateString(undefined,{ weekday:'long', day:'numeric', month:'long' });
-  root.appendChild(h);
-  root.appendChild(fhDayDash(date));
+  fhDayPage(root, 'today', 0);
 }
 function renderTomorrowPage(){
   const root = document.getElementById('tomorrowContent');
   if(!root) return;
-  root.innerHTML = '';
-  const date = shAddDays(new Date(), 1);
-  const h = document.createElement('div');
-  h.className = 'dash-heading';
-  h.textContent = 'Tomorrow — ' + date.toLocaleDateString(undefined,{ weekday:'long', day:'numeric', month:'long' });
-  root.appendChild(h);
-  root.appendChild(fhDayDash(date));
+  fhDayPage(root, 'tomorrow', 1);
 }
 
 /* ==================== Calendar (3 day / week / month) ==================== */
@@ -11372,7 +11411,7 @@ const FHPush = (function(){
   const DAYS = 14;
   /* person = whose device this is ('' = shared/family device). Chores are off unless turned on, and then only the kinds ticked. */
   const DEFAULTS = { events:true, lead:30, morning:true, morningAt:'07:30', evening:true, eveningAt:'19:00', person:'',
-                     chores:false, choresAt:'16:00', choreFreqs:['weekly', 'fortnightly', 'monthly'] };
+                     chores:false, choresAt:'16:00', choreFreqs:['weekly', 'fortnightly', 'monthly'], shop:true, name:'' };
   const FREQS = [['daily', 'Daily'], ['weekly', 'Weekly'], ['fortnightly', 'Fortnightly'], ['monthly', 'Monthly (1st and 20th)']];
 
   const TEST = window.__FH_TEST_PUSH || null;   // automated tests only: pretends this browser supports push
@@ -11423,6 +11462,13 @@ const FHPush = (function(){
       if(lines.length) items.push({ k:'day', key:'day:' + iso, date:iso, lines:lines.sort(function(a, b){ return a.t.localeCompare(b.t); }) });
       if(eve.length) items.push({ k:'eve', key:'eve:' + iso, date:iso, lines:eve });
     }
+    // essentials running low, the evening before the next shop
+    try{
+      if(Feature.on('essentials') && typeof FHExtras !== 'undefined'){
+        const low = FHExtras.essLowNames(), shopDay = FHExtras.nextShopDate(), siso = FHEvents.iso(shopDay);
+        if(low.length) items.push({ k:'shop', key:'shop:' + siso, date:siso, lines:low.map(function(n){ return { t:n, who:[] }; }) });
+      }
+    }catch(e){}
     return items;
   }
   function hash(s){ let h = 0; for(let i = 0; i < s.length; i++){ h = (h * 31 + s.charCodeAt(i)) | 0; } return String(h); }
@@ -11495,7 +11541,13 @@ const FHPush = (function(){
       const whoHint = h('p', { class:'ob-hint' });
       const setWhoHint = function(){ const m = ps.find(function(x){ return x.id === who.value; }); whoHint.textContent = m ? 'Gets ' + m.name + '’s reminders and things for everyone, and only chores given to ' + m.name + '.' : 'Gets everyone’s reminders.'; };
       setWhoHint();
-      who.addEventListener('change', function(){ change('person', who.value); setWhoHint(); });
+      who.addEventListener('change', function(){
+        const m = ps.find(function(x){ return x.id === who.value; });
+        p.name = m ? m.name : '';
+        if(m && m.role === 'child') p.shop = false;
+        fhRawRemove('family-hub-dash-person');
+        change('person', who.value); setWhoHint(); if(rerender) rerender();
+      });
       const freqs = h('div', { class:'fhpush-freqs' }, FREQS.map(function(f){
         const c = h('input', { type:'checkbox', checked:(p.choreFreqs || []).indexOf(f[0]) >= 0, onChange:function(){
           const list = (p.choreFreqs || []).filter(function(x){ return x !== f[0]; }); if(c.checked) list.push(f[0]); change('choreFreqs', list); } });
@@ -11508,7 +11560,8 @@ const FHPush = (function(){
         check('events', 'Events and timed tasks', lead),
         check('morning', 'Morning summary at', time('morningAt')),
         check('evening', 'Evening heads-up at', time('eveningAt')),
-        Feature.on('chores') ? choreBox : null, Feature.on('chores') ? freqs : null));
+        Feature.on('chores') ? choreBox : null, Feature.on('chores') ? freqs : null,
+        Feature.on('essentials') ? check('shop', 'Essentials running low, the evening before shop day') : null));
       card.appendChild(h('p', { class:'ob-hint', text:'The evening heads-up covers tomorrow’s all-day plans, like bin day or a school trip. Reminders come from your household’s events and tasks (not imported Google/Outlook/iCloud calendars). They are sent through your phone or browser’s own notification service, encrypted so only this device can read them.' }));
       card.appendChild(h('button', { type:'button', class:'btn secondary', text:'Turn off on this device', onClick:function(){ disable().then(rerender); } }));
       card.appendChild(err);
@@ -11547,7 +11600,7 @@ const FHPush = (function(){
       send.disabled = true; out.textContent = 'Sending\u2026';
       let mine = ''; try{ const sub = await current(); mine = sub ? sub.endpoint : ''; }catch(e){}
       try{
-        const r = await FHSync.fn('send-reminders', { action:'nudge', to:to, message:text, from:m ? m.name : '', exclude:mine }) || {};
+        const r = await FHSync.fn('send-reminders', { action:'nudge', to:to, message:text, from:m ? m.name : '', fromId:m ? m.id : '', exclude:mine }) || {};
         const who = to === 'all' ? 'everyone' : (ps.find(function(x){ return x.id === to; }) || {}).name;
         if(r.via === 'person' || r.via === 'all') out.textContent = 'Sent to ' + who + (r.sent > 1 ? ' (' + r.sent + ' devices)' : '') + '.';
         else if(r.via === 'shared') out.textContent = who + ' hasn\u2019t turned reminders on yet, so it went to the shared device' + (r.sent > 1 ? 's' : '') + '.';
