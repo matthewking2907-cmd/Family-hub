@@ -2170,6 +2170,11 @@ body.kid-locked #manageChores{ display:none !important; }
 .fhd-acts .fhe-add{ margin:0; }
 .fhd-plans{ display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap:8px 14px; align-items:start; }
 .fhd-plans > .fhe-block, .fhd-plans > .fht-block{ display:contents; }
+.fhd-plans.fhd-timeline{ display:flex; flex-direction:column; align-items:stretch; gap:12px; }
+.fhd-slot-head{ display:flex; align-items:center; gap:8px; font-size:.8rem; font-weight:800; color:var(--text,inherit); margin:0 0 5px; }
+.fhd-slot-head::after{ content:''; flex:1; height:1px; background:var(--panel-line,rgba(128,128,128,.25)); }
+.fhd-now{ font-size:.68rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#fff; background:var(--accent,#6C4F8A); border-radius:999px; padding:2px 8px; }
+.fhd-slot-list{ display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap:5px 14px; align-items:start; }
 .fhd-empty{ color:var(--muted,#777); font-size:.92rem; padding:4px 0; }
 .fhd-ings{ margin-top:10px; }
 .fhd-ings summary{ cursor:pointer; font-size:.78rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--muted,#777); padding:4px 0; }
@@ -2927,6 +2932,18 @@ const FHLocale = (function(){
     });
   }
   return { get, set, guess, initial, imperial, us, name, text, qty, qtyText, unit, applyMeals, applyRecipes };
+})();
+/* Dates and times follow the app's UK/US setting, not the browser language (an en-US browser otherwise shows
+   "Monday, October 12" and "2:30 PM" to a UK family). Only calls that leave the locale to the browser are changed. */
+(function(){
+  const D = Date.prototype;
+  ['toLocaleDateString', 'toLocaleTimeString', 'toLocaleString'].forEach(function(fn){
+    const orig = D[fn];
+    D[fn] = function(loc, opts){
+      if(loc === undefined || (Array.isArray(loc) && !loc.length)){ try{ loc = FHLocale.us() ? 'en-US' : 'en-GB'; }catch(e){ loc = undefined; } }
+      return orig.call(this, loc, opts);
+    };
+  });
 })();
 
 /* ==================== SETUP: catalogs ==================== */
@@ -8259,7 +8276,7 @@ const FHEvents = (function(){
   function people(){ try{ const v = JSON.parse(fhRawGet('chore-chart-people-v1') || '[]'); return Array.isArray(v) ? v : []; }catch(e){ return []; } }
   /* who is 'all', one person id, or an array of ids (older events only ever have the first two) */
   function whoIds(who){ return Array.isArray(who) ? who.filter(Boolean) : (who && who !== 'all' ? [who] : []); }
-  function whoPeople(who){ const ps = people(); return whoIds(who).map(function(id){ return ps.find(function(p){ return p.id === id; }); }).filter(Boolean); }
+  function whoPeople(who){ const ids = whoIds(who); return people().filter(function(p){ return ids.indexOf(p.id) >= 0; }); }  // family order, not tap order
   function colorOf(who){ const p = whoPeople(who)[0]; return p && p.hue != null ? 'hsl(' + p.hue + ',55%,48%)' : 'var(--accent,#6C4F8A)'; }
   function whoLabel(who){ const ps = whoPeople(who); return ps.length ? ps.map(function(p){ return p.name; }).join(', ') : 'Everyone'; }
 
@@ -8301,15 +8318,15 @@ const FHEvents = (function(){
     opts = opts || {};
     const list = forDay(date, opts.person);
     const wrap = h('div', { class:'fhe-block' });
-    list.forEach(function(ev){
-      const row = h('button', { type:'button', class:'fhe-ev' + (ev.ro ? ' ro' : ''), style:'--ec:' + (ev.ro ? ev.color : colorOf(ev.who)), onClick:function(){ ev.ro ? openInfo(ev) : openEditor({ ev:ev, date:date }); } },
-        h('span', { class:'fhe-time', text:timeText(ev) }),
-        h('span', { class:'fhe-title', text:ev.title || '(no title)' }),
-        h('span', { class:'fhe-who', text:ev.ro ? (ev.who || '') : (whoPeople(ev.who).length ? whoLabel(ev.who) : '') }));
-      wrap.appendChild(row);
-    });
+    list.forEach(function(ev){ wrap.appendChild(row(ev, date)); });
     if(opts.add !== false) wrap.appendChild(h('button', { type:'button', class:'fhe-add', text:'＋ Event', onClick:function(){ openEditor({ date:date }); } }));
     return wrap;
+  }
+  function row(ev, date){
+    return h('button', { type:'button', class:'fhe-ev' + (ev.ro ? ' ro' : ''), style:'--ec:' + (ev.ro ? ev.color : colorOf(ev.who)), onClick:function(){ ev.ro ? openInfo(ev) : openEditor({ ev:ev, date:date }); } },
+      h('span', { class:'fhe-time', text:timeText(ev) }),
+      h('span', { class:'fhe-title', text:ev.title || '(no title)' }),
+      h('span', { class:'fhe-who', text:ev.ro ? (ev.who || '') : (whoPeople(ev.who).length ? whoLabel(ev.who) : '') }));
   }
   function monthMarks(date){
     const list = forDay(date);
@@ -8402,7 +8419,7 @@ const FHEvents = (function(){
         h('div', { class:'fhe-form' }, ev.location ? h('div', { text:'📍 ' + ev.location }) : null, h('div', { class:'fhm-sub', text:'Imported from a connected calendar. Edit it there.' }))));
     document.body.appendChild(m);
   }
-  return { KEY:KEY, load:load, save:save, forDay:forDay, isFor:isFor, dayBlock:dayBlock, monthMarks:monthMarks, kitchenCard:kitchenCard, openEditor:openEditor, colorOf:colorOf, iso:iso, occursOn:occursOn };
+  return { KEY:KEY, load:load, save:save, forDay:forDay, isFor:isFor, dayBlock:dayBlock, row:row, monthMarks:monthMarks, kitchenCard:kitchenCard, openEditor:openEditor, colorOf:colorOf, iso:iso, occursOn:occursOn };
 })();
 
 /* Household essentials: tap "running low" and it goes on the next shop, and stays there until ticked off.
@@ -8564,19 +8581,20 @@ const FHTasks = (function(){
     return h('button', { type:'button', class:'fht-tick' + (t.done ? ' on' : '') + (big ? ' big' : ''), 'aria-label':(t.done ? 'Mark not done: ' : 'Mark done: ') + t.title, 'aria-pressed':t.done ? 'true' : 'false',
       style:'--ec:' + colorOf(t.who), onClick:function(e){ e.stopPropagation(); setDone(t.id, !t.done); } }, t.done ? '✓' : '');
   }
+  function row(t){
+    const od = overdue(t);
+    return h('div', { class:'fht-row' + (t.done ? ' done' : '') + (od ? ' od' : ''), style:'--ec:' + colorOf(t.who) },
+      tick(t),
+      h('button', { type:'button', class:'fht-main', onClick:function(){ openEditor({ task:t }); } },
+        h('span', { class:'fht-title', text:'☑ ' + t.title }),
+        h('span', { class:'fht-meta', text:[od ? 'Overdue' : (t.time ? timeLabel(t) : 'Due'), whoName(t.who)].filter(Boolean).join(' · ') })));
+  }
   function isFor(t, person){ return !person || !t.who || t.who === person; }
   function dayBlock(date, opts){
     const person = opts && opts.person;
     const list = forDay(date).filter(function(t){ return isFor(t, person); }); const frag = document.createDocumentFragment(); if(!list.length) return frag;
     const wrap = h('div', { class:'fhe-block fht-block' });
-    list.forEach(function(t){
-      const od = overdue(t);
-      wrap.appendChild(h('div', { class:'fht-row' + (t.done ? ' done' : '') + (od ? ' od' : ''), style:'--ec:' + colorOf(t.who) },
-        tick(t),
-        h('button', { type:'button', class:'fht-main', onClick:function(){ openEditor({ task:t }); } },
-          h('span', { class:'fht-title', text:'☑ ' + t.title }),
-          h('span', { class:'fht-meta', text:[od ? 'Overdue' : (t.time ? timeLabel(t) : 'Due'), whoName(t.who)].filter(Boolean).join(' · ') }))));
-    });
+    list.forEach(function(t){ wrap.appendChild(row(t)); });
     frag.appendChild(wrap); return frag;
   }
   function monthMarks(date){
@@ -8705,7 +8723,7 @@ const FHTasks = (function(){
     if(done.length && filter !== 'done') container.appendChild(h('div', { class:'fhes-foot' }, h('button', { type:'button', class:'btn secondary', text:'Clear ' + done.length + ' completed', onClick:function(){
       if(!confirm('Remove completed tasks from the list?')) return; save(load().filter(function(t){ return !t.done; })); render(container); } })));
   }
-  return { KEY:KEY, load:load, save:save, forDay:forDay, isFor:isFor, dayBlock:dayBlock, monthMarks:monthMarks, kitchenCard:kitchenCard, kitchenUpcoming:kitchenUpcoming, openEditor:openEditor, render:render, overdue:overdue, iso:iso };
+  return { KEY:KEY, load:load, save:save, forDay:forDay, isFor:isFor, dayBlock:dayBlock, row:row, monthMarks:monthMarks, kitchenCard:kitchenCard, kitchenUpcoming:kitchenUpcoming, openEditor:openEditor, render:render, overdue:overdue, iso:iso };
 })();
 
 /* Today / Tomorrow (and a calendar day) as three tidy sections: Plans (events + tasks), Dinner (with ingredients), Chores.
@@ -8724,6 +8742,26 @@ function fhDashFilter(person){
   const who = ps.find(function(p){ return p.id === person; });
   return h('div', { class:'fhd-filter-wrap' }, row, who ? h('div', { class:'fhd-filter-note', text:'Just ' + who.name + '’s plans and chores, plus things for everyone.' }) : null);
 }
+/* Busy days (FH_TIMELINE_MIN+ plans) are split into All day / Morning / Afternoon / Evening by start time on this device's clock.
+   Untimed and overdue tasks sit with All day. On today the current part of the day is marked Now. */
+const FH_TIMELINE_MIN = 4;
+const FH_SLOTS = [['allday', 'All day'], ['morning', 'Morning'], ['afternoon', 'Afternoon'], ['evening', 'Evening']];
+function fhSlotOf(hhmm){ const m = /^(\d{1,2}):(\d{2})/.exec(hhmm || ''); if(!m) return 'allday'; const hr = +m[1]; return hr < 12 ? 'morning' : hr < 17 ? 'afternoon' : 'evening'; }
+function fhTimeline(date, evs, tks){
+  const today = FHEvents.iso(date) === FHEvents.iso(new Date());
+  const items = [];
+  evs.forEach(function(ev){ items.push({ slot:ev.allDay ? 'allday' : fhSlotOf(ev.start), at:ev.allDay ? '' : (ev.start || ''), k:0, node:FHEvents.row(ev, date) }); });
+  tks.forEach(function(t){ const od = FHTasks.overdue(t) && t.due !== FHEvents.iso(date);
+    items.push({ slot:od ? 'allday' : fhSlotOf(t.time), at:od ? '' : (t.time || ''), k:1, node:FHTasks.row(t) }); });
+  const now = fhSlotOf(String(new Date().getHours()) + ':00');
+  return FH_SLOTS.map(function(s){
+    const list = items.filter(function(i){ return i.slot === s[0]; }).sort(function(a, b){ return a.at.localeCompare(b.at) || a.k - b.k; });
+    if(!list.length) return null;
+    return h('div', { class:'fhd-slot fhd-slot-' + s[0] },
+      h('div', { class:'fhd-slot-head' }, h('span', { text:s[1] }), today && s[0] === now ? h('span', { class:'fhd-now', text:'Now' }) : null),
+      h('div', { class:'fhd-slot-list' }, list.map(function(i){ return i.node; })));
+  }).filter(Boolean);
+}
 function fhDayDash(date){
   const wrap = h('div', { class:'fhd' });
   const iso = FHEvents.iso(date);
@@ -8735,8 +8773,11 @@ function fhDayDash(date){
     h('button', { type:'button', class:'fhe-add', text:'＋ Event', onClick:function(){ FHEvents.openEditor({ date:date }); } }),
     Feature.on('tasks') ? h('button', { type:'button', class:'fhe-add', text:'＋ Task', onClick:function(){ FHTasks.openEditor({ task:{ due:iso } }); } }) : null);
   const body = h('div', { class:'fhd-plans' });
-  if(evs.length) body.appendChild(FHEvents.dayBlock(date, { add:false, person:person }));
-  if(tks.length) body.appendChild(FHTasks.dayBlock(date, { person:person }));
+  if(evs.length + tks.length >= FH_TIMELINE_MIN){ body.classList.add('fhd-timeline'); fhTimeline(date, evs, tks).forEach(function(s){ body.appendChild(s); }); }
+  else {
+    if(evs.length) body.appendChild(FHEvents.dayBlock(date, { add:false, person:person }));
+    if(tks.length) body.appendChild(FHTasks.dayBlock(date, { person:person }));
+  }
   if(!evs.length && !tks.length) body.appendChild(h('div', { class:'fhd-empty', text:person ? 'Nothing planned for ' + fhDashPeople().find(function(p){ return p.id === person; }).name + '.' : 'Nothing planned.' }));
   const n = evs.length + tks.filter(function(t){ return !t.done; }).length;
   wrap.appendChild(h('section', { class:'fhd-sec fhd-plans-sec' },
@@ -10316,9 +10357,9 @@ function renderSettingsPage(){
   root.appendChild(h('div',{class:'st-card'}, h('h3',{text:'Units and wording'}),
     h('p',{class:'ob-label',text:'Measurements'}),
     h('div',{class:'ob-chips'}, lchip('Metric', lp.units==='metric', ()=>setLoc({units:'metric'})), lchip('Imperial', lp.units==='imperial', ()=>setLoc({units:'imperial'}))),
-    h('p',{class:'ob-label',text:'Food and household wording'}),
+    h('p',{class:'ob-label',text:'Wording and date format'}),
     h('div',{class:'ob-chips'}, lchip('UK', lp.naming==='uk', ()=>setLoc({naming:'uk'})), lchip('US', lp.naming==='us', ()=>setLoc({naming:'us'}))),
-    h('p',{class:'ob-hint',text:'Recipes, meal names and the shopping list update straight away. Chores and meals you wrote yourself keep your own wording. Ticked-off shopping items may untick when names change.'})));
+    h('p',{class:'ob-hint',text:'Recipes, meal names, dates and the shopping list update straight away. Chores and meals you wrote yourself keep your own wording. Ticked-off shopping items may untick when names change.'})));
   const snap = ChoreApp.getCounts ? ChoreApp.getCounts() : null;
   if(snap){
     root.appendChild(h('div',{class:'st-card'}, h('h3',{text:'Your household'}),
