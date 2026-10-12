@@ -2214,6 +2214,10 @@ body.kid-locked #manageChores{ display:none !important; }
 .fhpush-row > span{flex:0 1 auto;}
 .fhpush-row input[type=checkbox]{flex:0 0 auto;}
 
+.fhpush-freqs{display:flex;flex-wrap:wrap;gap:6px 14px;padding-left:24px;}
+.fhnudge-quick .fhe-chip{font-size:.85rem;padding:6px 11px;}
+.fhd-acts{flex-wrap:wrap;justify-content:flex-end;}
+
 </style>
 <script>/* ==================== THEME: colour palettes + light / dark / auto ==================== */
 /* Runs in <head> so the right colours are in place before the first paint. */
@@ -7806,6 +7810,7 @@ const __ready = init();
   return {
     ready: __ready,
     getCounts: function(){ return { people: people.length, chores: chores.length, rooms: categories.length }; },
+    choresForDay: function(date){ const dayIdx = (date.getDay()+6)%7, iso = toISODate(date), parity = parityForMonday(mondayOf(date)), ym = ymKey(date), dom = date.getDate(); return chores.filter(c=> c.freq==='daily' || (c.freq==='weekly' && c.weekday===dayIdx) || (c.freq==='fortnightly' && c.weekday===dayIdx && (c.parity||'A')===parity) || (c.freq==='monthly' && (dom===1 || dom===20))).map(c=>{ const key = c.id + '::' + (c.freq==='monthly' ? ym : iso); const who = resolveAssigneeForKey(c, date, key); return { id:c.id, name:c.name, freq:c.freq, who: who && who !== 'anyone' && personById(who) ? who : '', done: (completions[key]||0) >= (c.timesPerDay||1) }; }); },
     setPersonFields: function(id, f){ const p = people.find(x=>x.id===id); if(!p) return false; Object.keys(f).forEach(k=>{ if(f[k] === undefined) delete p[k]; else p[k] = f[k]; }); saveKey(KEYS.people, people); return true; },
     buildDayBlock: buildDayBlock,
     getDaySummary: getDaySummary,
@@ -8917,7 +8922,8 @@ function fhDayDash(date){
   const evs = FHEvents.forDay(date, person), tks = Feature.on('tasks') ? FHTasks.forDay(date).filter(function(t){ return FHTasks.isFor(t, person); }) : [];
   const acts = h('div', { class:'fhd-acts fht-admin' },
     h('button', { type:'button', class:'fhe-add', text:'＋ Event', onClick:function(){ FHEvents.openEditor({ date:date }); } }),
-    Feature.on('tasks') ? h('button', { type:'button', class:'fhe-add', text:'＋ Task', onClick:function(){ FHTasks.openEditor({ task:{ due:iso } }); } }) : null);
+    Feature.on('tasks') ? h('button', { type:'button', class:'fhe-add', text:'＋ Task', onClick:function(){ FHTasks.openEditor({ task:{ due:iso } }); } }) : null,
+    iso === FHEvents.iso(new Date()) && typeof FHPush !== 'undefined' && FHPush.canNudge() ? h('button', { type:'button', class:'fhe-add fhd-nudge', text:'📣 Nudge', onClick:function(){ FHPush.openNudge(); } }) : null);
   const body = h('div', { class:'fhd-plans' });
   if(evs.length + tks.length >= FH_TIMELINE_MIN){ body.classList.add('fhd-timeline'); fhTimeline(date, evs, tks).forEach(function(s){ body.appendChild(s); }); }
   else {
@@ -11058,6 +11064,11 @@ const FHSync = (function(){
     catch(e){ if(e.status === 401 && !retried){ st.auth.exp = 0; return api(path, opts, true); } throw e; }
   }
   function rpc(name, args){ return api('rpc/' + name, { method:'POST', body:JSON.stringify(args || {}) }); }
+  /* call one of our Edge Functions as the signed-in parent (used for instant nudges) */
+  async function fn(name, body){
+    const c = config(), t = await token();
+    return http(c.url + '/functions/v1/' + name, { method:'POST', headers:{ apikey:c.key, Authorization:'Bearer ' + t, 'Content-Type':'application/json' }, body:JSON.stringify(body || {}) });
+  }
 
   /* ---------- sign-in ---------- */
   async function sendCode(email){
@@ -11235,7 +11246,7 @@ const FHSync = (function(){
   }
 
   return { init, summary, onChange, nudge, setConfig, sendCode, verify, createHousehold, joinHousehold, adoptHousehold,
-           leaveHousehold, newCode, disconnect, syncNow, hasLocalSetup, refreshHousehold, rpc,
+           leaveHousehold, newCode, disconnect, syncNow, hasLocalSetup, refreshHousehold, rpc, fn,
            _merge3: merge3, _eligible: eligible };
 })();
 
@@ -11359,7 +11370,10 @@ const FHPush = (function(){
   const PREF_KEY = 'family-hub-push-prefs';    // per device, never synced
   const HASH_KEY = 'family-hub-push-hash';     // last schedule uploaded from this device
   const DAYS = 14;
-  const DEFAULTS = { events:true, lead:30, morning:true, morningAt:'07:30', evening:true, eveningAt:'19:00', person:'' };
+  /* person = whose device this is ('' = shared/family device). Chores are off unless turned on, and then only the kinds ticked. */
+  const DEFAULTS = { events:true, lead:30, morning:true, morningAt:'07:30', evening:true, eveningAt:'19:00', person:'',
+                     chores:false, choresAt:'16:00', choreFreqs:['weekly', 'fortnightly', 'monthly'] };
+  const FREQS = [['daily', 'Daily'], ['weekly', 'Weekly'], ['fortnightly', 'Fortnightly'], ['monthly', 'Monthly (1st and 20th)']];
 
   const TEST = window.__FH_TEST_PUSH || null;   // automated tests only: pretends this browser supports push
   function vapid(){ return (TEST && TEST.vapid) || (typeof FH_SYNC_BUILD !== 'undefined' && FH_SYNC_BUILD && FH_SYNC_BUILD.vapid) || ''; }
@@ -11402,6 +11416,10 @@ const FHPush = (function(){
         if(t.time) items.push({ k:'task', key:'task:' + t.id + ':' + iso, date:iso, at:t.time, title:t.title, names:names(who), who:who });
         lines.push({ t:(t.time ? t.time + ' ' : '') + '☑ ' + t.title, who:who });
       });
+      if(typeof ChoreApp !== 'undefined' && ChoreApp.choresForDay && Feature.on('chores')){
+        const cs = ChoreApp.choresForDay(day).filter(function(c){ return !c.done; });
+        if(cs.length) items.push({ k:'chores', key:'chores:' + iso, date:iso, lines:cs.map(function(c){ return { t:c.name, who:c.who ? [c.who] : [], f:c.freq, n:c.who ? names([c.who]) : '' }; }) });
+      }
       if(lines.length) items.push({ k:'day', key:'day:' + iso, date:iso, lines:lines.sort(function(a, b){ return a.t.localeCompare(b.t); }) });
       if(eve.length) items.push({ k:'eve', key:'eve:' + iso, date:iso, lines:eve });
     }
@@ -11471,19 +11489,81 @@ const FHPush = (function(){
       const lead = h('select', { class:'ob-input', 'aria-label':'How long before' }, [10, 15, 30, 60, 120].map(function(m){ const o = h('option', { value:String(m), text:m < 60 ? m + ' min before' : (m / 60) + (m === 60 ? ' hour' : ' hours') + ' before' }); if(+p.lead === m) o.selected = true; return o; }));
       lead.addEventListener('change', function(){ change('lead', +lead.value); });
       const time = function(k){ const t = h('input', { type:'time', class:'ob-input', value:p[k] }); t.addEventListener('change', function(){ if(t.value) change(k, t.value); }); return t; };
-      const who = h('select', { class:'ob-input', 'aria-label':'Whose reminders' }, h('option', { value:'', text:'Everyone’s' }),
-        people().filter(function(x){ return x.name; }).map(function(x){ const o = h('option', { value:x.id, text:'Just ' + x.name + '’s (and everyone’s)' }); if(p.person === x.id) o.selected = true; return o; }));
-      who.addEventListener('change', function(){ change('person', who.value); });
+      const ps = people().filter(function(x){ return x.name; });
+      const who = h('select', { class:'ob-input', 'aria-label':'Whose device is this' }, h('option', { value:'', text:'Shared / family device' }),
+        ps.map(function(x){ const o = h('option', { value:x.id, text:x.name + '’s' }); if(p.person === x.id) o.selected = true; return o; }));
+      const whoHint = h('p', { class:'ob-hint' });
+      const setWhoHint = function(){ const m = ps.find(function(x){ return x.id === who.value; }); whoHint.textContent = m ? 'Gets ' + m.name + '’s reminders and things for everyone, and only chores given to ' + m.name + '.' : 'Gets everyone’s reminders.'; };
+      setWhoHint();
+      who.addEventListener('change', function(){ change('person', who.value); setWhoHint(); });
+      const freqs = h('div', { class:'fhpush-freqs' }, FREQS.map(function(f){
+        const c = h('input', { type:'checkbox', checked:(p.choreFreqs || []).indexOf(f[0]) >= 0, onChange:function(){
+          const list = (p.choreFreqs || []).filter(function(x){ return x !== f[0]; }); if(c.checked) list.push(f[0]); change('choreFreqs', list); } });
+        return h('label', { class:'fhpush-row' }, c, h('span', { text:f[1] })); }));
+      const choreBox = check('chores', 'Chores, one list a day at', time('choresAt'));
+      const showFreqs = function(){ freqs.hidden = !p.chores; };
+      choreBox.querySelector('input[type=checkbox]').addEventListener('change', showFreqs); showFreqs();
       card.appendChild(h('div', { class:'fhpush-opts' },
+        h('label', { class:'fhpush-row' }, h('span', { text:'Whose device is this?' }), who), whoHint,
         check('events', 'Events and timed tasks', lead),
         check('morning', 'Morning summary at', time('morningAt')),
         check('evening', 'Evening heads-up at', time('eveningAt')),
-        h('label', { class:'fhpush-row' }, h('span', { text:'Show' }), who)));
+        Feature.on('chores') ? choreBox : null, Feature.on('chores') ? freqs : null));
       card.appendChild(h('p', { class:'ob-hint', text:'The evening heads-up covers tomorrow’s all-day plans, like bin day or a school trip. Reminders come from your household’s events and tasks (not imported Google/Outlook/iCloud calendars). They are sent through your phone or browser’s own notification service, encrypted so only this device can read them.' }));
       card.appendChild(h('button', { type:'button', class:'btn secondary', text:'Turn off on this device', onClick:function(){ disable().then(rerender); } }));
       card.appendChild(err);
     });
     return card;
+  }
+
+  /* ---- nudges: a parent sends a message straight to someone's devices ---- */
+  function me(){ const id = prefs().person; return people().find(function(x){ return x.id === id; }) || null; }
+  function canNudge(){
+    if(!vapid() || !synced()) return false;
+    const m = me(); if(m && m.role === 'child') return false;
+    try{ if(FHLock.isLocked()) return false; }catch(e){}
+    return true;
+  }
+  const QUICK = ['Dinner\u2019s ready!', 'Time for bed', 'Come downstairs please', 'Shoes on, we\u2019re leaving', 'Bath time', 'Home in 10 minutes'];
+  function openNudge(){
+    if(document.getElementById('fhNudgeSheet')) return;
+    const ps = people().filter(function(x){ return x.name; }), m = me();
+    let to = 'all';
+    const close = function(){ const el = document.getElementById('fhNudgeSheet'); if(el) el.remove(); };
+    const chips = h('div', { class:'fhe-chips fhnudge-to' });
+    const draw = function(){
+      chips.innerHTML = '';
+      [{ id:'all', name:'Everyone', hue:null }].concat(ps.filter(function(x){ return !m || x.id !== m.id; })).forEach(function(x){
+        const on = to === x.id;
+        chips.appendChild(h('button', { type:'button', class:'fhe-chip' + (on ? ' on' : ''), 'aria-pressed':on ? 'true' : 'false', style:'--ec:' + (x.hue != null ? 'hsl(' + x.hue + ',55%,48%)' : 'var(--accent,#6C4F8A)'), text:x.name, onClick:function(){ to = x.id; draw(); } }));
+      });
+    };
+    draw();
+    const msg = h('textarea', { class:'fhe-in', rows:'2', maxlength:'120', placeholder:'Or type a message' });
+    const quick = h('div', { class:'fhe-chips fhnudge-quick' }, QUICK.map(function(q){ return h('button', { type:'button', class:'fhe-chip', style:'--ec:var(--accent,#6C4F8A)', text:q, onClick:function(){ msg.value = q; } }); }));
+    const out = h('p', { class:'ob-hint fhnudge-out', role:'status' });
+    const send = h('button', { type:'button', class:'btn', text:'Send', onClick:async function(){
+      const text = msg.value.trim(); if(!text){ out.textContent = 'Pick or type a message first.'; msg.focus(); return; }
+      send.disabled = true; out.textContent = 'Sending\u2026';
+      let mine = ''; try{ const sub = await current(); mine = sub ? sub.endpoint : ''; }catch(e){}
+      try{
+        const r = await FHSync.fn('send-reminders', { action:'nudge', to:to, message:text, from:m ? m.name : '', exclude:mine }) || {};
+        const who = to === 'all' ? 'everyone' : (ps.find(function(x){ return x.id === to; }) || {}).name;
+        if(r.via === 'person' || r.via === 'all') out.textContent = 'Sent to ' + who + (r.sent > 1 ? ' (' + r.sent + ' devices)' : '') + '.';
+        else if(r.via === 'shared') out.textContent = who + ' hasn\u2019t turned reminders on yet, so it went to the shared device' + (r.sent > 1 ? 's' : '') + '.';
+        else out.textContent = 'Nobody has reminders turned on' + (to === 'all' ? '' : ' for ' + who) + ' yet. Turn them on in Settings on their device.';
+        if(r.sent) setTimeout(close, 1500);
+      }catch(e){ out.textContent = e.message || 'Could not send. Check the connection and try again.'; }
+      send.disabled = false;
+    } });
+    const sheet = h('div', { id:'fhNudgeSheet', class:'fhm-back', onClick:function(e){ if(e.target === sheet) close(); } },
+      h('div', { class:'fhm-sheet', role:'dialog', 'aria-label':'Send a nudge' },
+        h('div', { class:'fhm-head' }, h('div', { class:'fhm-title', text:'\ud83d\udce3 Send a nudge' }), h('button', { type:'button', class:'fhm-x', 'aria-label':'Close', text:'\u2715', onClick:close })),
+        h('div', { class:'fhe-form' },
+          h('div', { class:'fhe-field' }, h('span', { class:'fhe-lab', text:'To' }), chips),
+          h('div', { class:'fhe-field' }, h('span', { class:'fhe-lab', text:'Message' }), quick), msg, out,
+          h('div', { class:'fhe-actions' }, send, h('button', { type:'button', class:'btn secondary', text:'Cancel', onClick:close })))));
+    document.body.appendChild(sheet);
   }
 
   function init(){
@@ -11492,7 +11572,7 @@ const FHPush = (function(){
     setInterval(function(){ upload(false); }, 30 * 60000);
     try{ FHSync.onChange(soon); }catch(e){}
   }
-  return { buildSchedule:buildSchedule, upload:upload, soon:soon, settingsCard:settingsCard, prefs:prefs, init:init, DEFAULTS:DEFAULTS };
+  return { buildSchedule:buildSchedule, upload:upload, soon:soon, settingsCard:settingsCard, prefs:prefs, init:init, canNudge:canNudge, openNudge:openNudge, DEFAULTS:DEFAULTS };
 })();
 
 /* ==================== Startup (setup-aware) ==================== */
