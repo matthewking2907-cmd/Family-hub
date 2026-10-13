@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Family Hub (setup test)</title>
+<title>On the FridgeDoor</title>
 <style>
 
 @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap');
@@ -1811,7 +1811,6 @@ body.ob-open{overflow:hidden;}
 .ob-shopsum span{color:var(--muted);}
 .st-card{background:var(--white);border:1px solid var(--panel-line);border-radius:14px;padding:6px 14px 12px;margin-bottom:14px;}
 .st-card h3{margin:10px 0 4px;}
-.st-banner{margin-bottom:14px;padding:10px 12px;border-radius:10px;background:#FFF4E0;color:#8A5A00;font-size:13px;font-weight:700;}
 /* feature-off helpers */
 body.rewards-off #starsBar,body.rewards-off #rewardsPanel,body.rewards-off .stars-weight-field{display:none !important;}
 
@@ -2286,12 +2285,13 @@ var FHTheme = (function(){
 <meta name="theme-color" content="#6C4F8A">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-title" content="FridgeDoor">
 </head>
 <body>
 <div class="shell">
   <div class="drawer-backdrop" id="drawerBackdrop"></div>
   <nav class="sidebar" id="sidebar">
-    <div class="sidebar-head">Family Hub</div>
+    <div class="sidebar-head">On the FridgeDoor</div>
     <div class="nav-label-grp">Family planner</div>
     <button class="nav-item active" data-page="today"><span class="nav-icon">☀️</span><span class="nav-label">Today</span></button>
     <button class="nav-item" data-page="tomorrow"><span class="nav-icon">⏭️</span><span class="nav-label">Tomorrow</span></button>
@@ -8360,10 +8360,10 @@ const FHCal = (function(){
       let s = null; try{ s = FHSync.summary(); }catch(e){}
       if(!s || !s.configured){ box.appendChild(h('p', { class:'ob-hint', text:'Calendar import needs sync, which is not set up in this build.' })); return; }
       if(s.mode !== 'ok' || !s.household){
-        box.appendChild(h('p', { class:'ob-hint', text:'Turn on “Sync across devices” first (above). Then each parent can add their Google, Outlook or iCloud calendar here and everyone sees it in Family Hub. It is read-only: edit events in the original calendar.' }));
+        box.appendChild(h('p', { class:'ob-hint', text:'Turn on “Sync across devices” first (above). Then each parent can add their Google, Outlook or iCloud calendar here and everyone sees it here. It is read-only: edit events in the original calendar.' }));
         return;
       }
-      box.appendChild(h('p', { class:'ob-hint', text:'Show your Google, Outlook or iCloud calendar in Family Hub. Each parent adds their own, and it appears in their colour. It is read-only: edit events in the original calendar.' }));
+      box.appendChild(h('p', { class:'ob-hint', text:'Show your Google, Outlook or iCloud calendar here. Each parent adds their own, and it appears in their colour. It is read-only: edit events in the original calendar.' }));
       if(lastErr) box.appendChild(h('p', { class:'ob-hint', style:'color:var(--brick-strong,#b3402a)', text:lastErr }));
       cache.feeds.forEach(function(f){
         const d = cache.data[f.id] || {}, p = personOf(f.who), col = p && p.hue != null ? 'hsl(' + p.hue + ',55%,48%)' : 'var(--accent,#6C4F8A)';
@@ -8375,7 +8375,7 @@ const FHCal = (function(){
             f.busy_only ? h('div', { class:'fhc-sub', text:f.mine ? 'Family sees “Busy” only.' : 'Shows as “Busy” only.' }) : null),
           f.mine ? h('div', { class:'fhc-btns' },
             h('button', { type:'button', class:'ob-btn ghost', text:f.busy_only ? 'Show titles' : 'Busy only', onClick:function(){ updateFeed(f.id, f.label, f.who, !f.busy_only).catch(function(e){ alert(e.message); }); } }),
-            h('button', { type:'button', class:'ob-btn ghost', text:'Remove', onClick:function(){ if(confirm('Remove “' + (f.label || 'this calendar') + '” from Family Hub? Your original calendar is not changed.')) removeFeed(f.id).catch(function(e){ alert(e.message); }); } })) : null);
+            h('button', { type:'button', class:'ob-btn ghost', text:'Remove', onClick:function(){ if(confirm('Remove “' + (f.label || 'this calendar') + '”? Your original calendar is not changed.')) removeFeed(f.id).catch(function(e){ alert(e.message); }); } })) : null);
         box.appendChild(row);
       });
       const parents = (function(){ try{ return JSON.parse(fhRawGet('chore-chart-people-v1') || '[]').filter(function(x){ return x.name; }); }catch(e){ return []; } })();
@@ -9920,8 +9920,8 @@ const OBW = (function(){
   function stepWelcome(){
     return [
       h('div',{class:'ob-hero'},'🏡'),
-      ...title(mode==='rerun' ? 'Set up again' : 'Welcome to Family Hub', 'A few quick questions and your hub is ready: your people, your rooms, suggested chores and a meal plan that fills in your shopping list. Takes about three minutes — you can change anything later.'),
-      (mode!=='rerun' && FHSync.summary().configured) ? h('div',{class:'ob-row',style:'margin-top:14px'}, h('button',{type:'button',class:'ob-btn ghost',id:'obSyncLink',text:'I already use Family Hub on another device',onClick:()=>fhSyncSignInModal()})) : null,
+      ...title(mode==='rerun' ? 'Set up again' : 'On the FridgeDoor', 'Your family’s hub for meals, chores and plans. A few quick questions and it’s ready: your people, your rooms, suggested chores and a meal plan that fills in your shopping list. Takes about three minutes — you can change anything later.'),
+      (mode!=='rerun' && FHSync.summary().configured) ? h('div',{class:'ob-row',style:'margin-top:14px'}, h('button',{type:'button',class:'ob-btn ghost',id:'obSyncLink',text:'I already use it on another device',onClick:()=>fhSyncSignInModal()})) : null,
       mode==='rerun' ? h('div',{class:'ob-warn'},'⚠️ Finishing this replaces your current people, chores, meal plan and ticks. Export a backup from Settings first if you want to keep them.') : null
     ];
   }
@@ -10502,7 +10502,7 @@ function fhImportBackup(file, done){
       rm.forEach(k=>localStorage.removeItem(k));
       Object.keys(obj.data).forEach(k=>localStorage.setItem(STORAGE_PREFIX+k, obj.data[k]));
       location.reload();
-    }catch(e){ done('That doesn’t look like a Family Hub backup file.'); }
+    }catch(e){ done('That doesn’t look like a backup file from this app.'); }
   };
   r.readAsText(file);
 }
@@ -10512,9 +10512,6 @@ function renderSettingsPage(){
   if(!root) return;
   root.innerHTML = '';
   const cfg = Feature.get();
-  if(STORAGE_PREFIX){
-    root.appendChild(h('div',{class:'st-banner',text:'🧪 Test build — this copy keeps its own data and never touches your normal Family Hub.'}));
-  }
   const F = Feature;
   const toggle = (key, emoji, name, desc, disabled)=> h('label',{class:'ob-feature'+(disabled?' dis':'')},
     h('span',{class:'ob-fe-ico',text:emoji}),
@@ -10615,7 +10612,7 @@ function showAllSet(){
 const FH_APP_VERSION = '0.28 (test build)';
 function fhFeedbackNote(){
   const L=[]; const add=(k,v)=>L.push(k+': '+v);
-  add('App', 'Family Hub '+FH_APP_VERSION);
+  add('App', 'On the FridgeDoor '+FH_APP_VERSION);
   try{ add('Device', navigator.userAgent); }catch(e){}
   try{ add('Screen', screen.width+'x'+screen.height+' @'+(window.devicePixelRatio||1)+'x, window '+innerWidth+'x'+innerHeight); }catch(e){}
   try{ add('Installed as app', (matchMedia('(display-mode: standalone)').matches || navigator.standalone) ? 'yes' : 'no (browser tab)'); }catch(e){}
@@ -11327,7 +11324,7 @@ function fhSyncCard(opts){
         box.appendChild(em);
         box.appendChild(h('div', { class:'ob-row' }, btn('Email me a code', function(){ view.email = em.value; run(function(){ return FHSync.sendCode(view.email).then(function(e){ view.email = e; view.step = 'code'; }); }); }, '', 'stSyncSend')));
       } else {
-        box.appendChild(note('We emailed a code to ' + view.email + '. It can take a minute.'));
+        box.appendChild(note('We emailed a code to ' + view.email + ' from On the FridgeDoor. It can take a minute. Not there? Check spam or Promotions.'));
         const cd = h('input', { type:'text', id:'stSyncCode', placeholder:'Code from the email', inputmode:'numeric', autocomplete:'one-time-code', style:'width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--panel-line,#ddd);border-radius:10px;font:inherit;margin-bottom:8px;letter-spacing:2px' });
         box.appendChild(cd);
         box.appendChild(h('div', { class:'ob-row' },
@@ -11335,7 +11332,7 @@ function fhSyncCard(opts){
           btn('Back', function(){ view.step = 'email'; view.msg = ''; render(); }, 'ghost')));
       }
     } else if(s.mode === 'nohh'){
-      box.appendChild(note('Signed in as ' + s.email + '. Is this the first device for your family, or are you joining someone who already uses Family Hub?'));
+      box.appendChild(note('Signed in as ' + s.email + '. Is this the first device for your family, or are you joining someone who already uses the app?'));
       if(!view.join){
         const row = h('div', { class:'ob-row' });
         if(FHSync.hasLocalSetup()) row.appendChild(btn('Start sync from this device', function(){ run(function(){ return FHSync.createHousehold(); }); }, '', 'stSyncCreate'));
@@ -11346,7 +11343,7 @@ function fhSyncCard(opts){
       } else {
         const cd = h('input', { type:'text', id:'stSyncJoinCode', placeholder:'ABCD-1234-EF56', autocapitalize:'characters', autocomplete:'off', style:'width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--panel-line,#ddd);border-radius:10px;font:inherit;margin-bottom:8px' });
         box.appendChild(cd);
-        box.appendChild(note('Find the code on a device already using Family Hub: Settings, Sync across devices.'));
+        box.appendChild(note('Find the code on a device already using the app: Settings, Sync across devices.'));
         box.appendChild(h('div', { class:'ob-row' },
           btn('Join household', function(){
             if(FHSync.hasLocalSetup() && !confirm('This device already has its own data. Joining replaces it with the household\'s data. Continue?')) return;
@@ -11495,7 +11492,7 @@ const FHPush = (function(){
     await FHSync.rpc('save_push_sub', { p_endpoint:sub.endpoint, p_p256dh:bytesToB64(sub.getKey('p256dh')), p_auth:bytesToB64(sub.getKey('auth')), p_prefs:prefs(), p_tz:tz() });
   }
   async function enable(){
-    if(await Notification.requestPermission() !== 'granted') throw new Error('Notifications are blocked for Family Hub. Allow them in your browser or phone settings, then try again.');
+    if(await Notification.requestPermission() !== 'granted') throw new Error('Notifications are blocked for this app. Allow them in your browser or phone settings, then try again.');
     const reg = await registration();
     const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:b64ToBytes(vapid()) });
     await sendSub(sub); await upload(true);
@@ -11510,11 +11507,11 @@ const FHPush = (function(){
   function settingsCard(rerender){
     const card = h('div', { class:'st-card', id:'stReminders' }, h('h3', { text:'Reminders on this device' }));
     const note = function(t){ card.appendChild(h('p', { class:'ob-hint', text:t })); return card; };
-    if(!vapid()) return note('Reminders are not switched on for this Family Hub yet (the server part needs setting up once).');
+    if(!vapid()) return note('Reminders are not switched on for this app yet (the server part needs setting up once).');
     if(!synced()) return note('Reminders use your household sync. Sign in under “Sync across devices” first.');
-    if(iosNeedsInstall()) return note('On iPhone and iPad, reminders only work in the installed app: tap Share, then “Add to Home Screen”, and open Family Hub from there.');
+    if(iosNeedsInstall()) return note('On iPhone and iPad, reminders only work in the installed app: tap Share, then “Add to Home Screen”, and open FridgeDoor from there.');
     if(!supported()) return note('This browser cannot show reminders. Try the installed app, Chrome, Edge, Firefox or Safari.');
-    if(Notification.permission === 'denied') return note('Notifications are blocked for Family Hub. Allow them in your browser or phone settings and come back here.');
+    if(Notification.permission === 'denied') return note('Notifications are blocked for this app. Allow them in your browser or phone settings and come back here.');
     const status = h('p', { class:'ob-hint fhpush-status', text:'Checking…' });
     const err = h('p', { class:'fhe-err' });
     card.appendChild(status);

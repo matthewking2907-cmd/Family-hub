@@ -1,7 +1,7 @@
 {
-  "name": "Family Hub Setup Test",
-  "short_name": "Hub Setup Test",
-  "description": "Test copy of Family Hub with the new setup wizard. Keeps its own data.",
+  "name": "On the FridgeDoor",
+  "short_name": "FridgeDoor",
+  "description": "Your family's hub for meals, chores and plans.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
